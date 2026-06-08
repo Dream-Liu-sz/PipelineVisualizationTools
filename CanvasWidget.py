@@ -170,7 +170,10 @@ class CanvasImage(QFrame):
             if hit is not None:
                 self.setSelectedLink(hit[0], hit[1])
                 self.linkClicked.emit(hit[0], hit[1])
-            else:
+            event.ignore()
+        elif event.button() == Qt.RightButton:
+            hit = self.hitTestLink(event.pos())
+            if hit is None:
                 self.setSelectedLink(None, None)
                 self.backgroundClicked.emit()
             event.ignore()

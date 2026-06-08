@@ -50,6 +50,7 @@ class NodePainter(QFrame):
         self.mHovered = False
         self.mSelected = False
         self.mJsonOpend = jsonOpened
+        self.mShowPortLabels = True
 
     def connectParentSlot(self, slot):
         '''
@@ -116,10 +117,11 @@ class NodePainter(QFrame):
             p.setPen(QPen(QColor(COLORS["text_muted"]), 1))
             p.drawEllipse(QRect(port_center.x() - 4, port_center.y() - 4, 8, 8))
             p.setPen(QColor(COLORS["text_muted"]))
-            if self.mJsonOpend:
-                p.drawText(port.getPortPos() + QPoint(10, 4), label)
-            else:
-                p.drawText(port.getPortPos() + QPoint(10, 4), label)
+            if self.mShowPortLabels:
+                if self.mJsonOpend:
+                    p.drawText(port.getPortPos() + QPoint(10, 4), label)
+                else:
+                    p.drawText(port.getPortPos() + QPoint(10, 4), label)
 
         for port in self.mNode.getOutputPort():
             portName = port.getPortNamePrune() if port.getPortNamePrune() is not None else port.getPortName()
@@ -129,10 +131,11 @@ class NodePainter(QFrame):
             p.setPen(QPen(accent, 2))
             p.drawEllipse(QRect(port_center.x() - 4, port_center.y() - 4, 8, 8))
             p.setPen(QColor(COLORS["text_muted"]))
-            if self.mJsonOpend:
-                p.drawText(port.getPortPos() - QPoint(8, -4), label)
-            else:
-                p.drawText(port.getPortPos() - QPoint(18, -4), label)
+            if self.mShowPortLabels:
+                if self.mJsonOpend:
+                    p.drawText(port.getPortPos() - QPoint(8, -4), label)
+                else:
+                    p.drawText(port.getPortPos() - QPoint(18, -4), label)
         # if self.shape == "Line":
         #     p.drawLine(rect.topLeft(), rect.bottomRight())
         # elif self.shape == "Rectangle":
@@ -176,6 +179,10 @@ class NodePainter(QFrame):
 
     def setSelected(self, selected):
         self.mSelected = selected
+        self.update()
+
+    def setShowPortLabels(self, show):
+        self.mShowPortLabels = show
         self.update()
 
     def mousePressEvent(self, event):

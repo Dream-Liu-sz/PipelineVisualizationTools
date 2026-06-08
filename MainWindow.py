@@ -17,12 +17,16 @@ from Utils import MsgType
 from UseCase import UseCaseDes
 from ui_theme import COLORS, app_stylesheet, font, node_color, tooltip_stylesheet
 import sys
+import ctypes
 
 import resource
 # import time
 
 class MainWindow(QMainWindow):
     TAG = "MainWindow"
+    DEFAULT_PIPELINE_ZOOM = 0.62
+    PORT_LABEL_MIN_ZOOM = 0.78
+    CANVAS_MAJOR_GRID = 160
     mSignal = pyqtSignal(ComMsg)
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
@@ -44,6 +48,7 @@ class MainWindow(QMainWindow):
         self.setPalette(QPalette(QColor(COLORS["bg"])))
         self.setAutoFillBackground(True)
         self.setWindowIcon(QIcon(":res/logo.ico"))
+        self.applyNativeDarkTitleBar()
         # self.setWindowFlag(Qt.FramelessWindowHint)
         # self.setAttribute(Qt.WA_TranslucentBackground)
         self.isTimeEnd = False
@@ -65,7 +70,26 @@ class MainWindow(QMainWindow):
         self.mSelectedLink = None
         self.mInspectorMode = "pipeline"
         self.mBaseLayout = {}
+        self.mPipelineBaseLayoutMap = {}
         self.initUI()
+
+    def applyNativeDarkTitleBar(self):
+        if sys.platform != "win32":
+            return
+        try:
+            hwnd = int(self.winId())
+            value = ctypes.c_int(1)
+            # DWMWA_USE_IMMERSIVE_DARK_MODE is 20 on current Windows 10/11,
+            # with 19 used by older builds.
+            for attr in (20, 19):
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    ctypes.c_void_p(hwnd),
+                    ctypes.c_int(attr),
+                    ctypes.byref(value),
+                    ctypes.sizeof(value)
+                )
+        except Exception:
+            pass
 
 
     def initUI(self):
@@ -105,23 +129,10 @@ class MainWindow(QMainWindow):
         self.mSearchEdit.setObjectName("treeSearch")
         self.mSearchEdit.setPlaceholderText("Filter use cases or pipelines")
         self.mSearchEdit.textChanged.connect(self.filterTree)
-        treeTools = QWidget(self.mLeftPanel)
-        treeToolsLayout = QHBoxLayout(treeTools)
-        treeToolsLayout.setContentsMargins(0, 0, 0, 0)
-        treeToolsLayout.setSpacing(8)
-        self.mExpandTreeButton = QPushButton("Expand All", treeTools)
-        self.mExpandTreeButton.setObjectName("toolbarButton")
-        self.mExpandTreeButton.clicked.connect(self.expandTree)
-        self.mCollapseTreeButton = QPushButton("Collapse All", treeTools)
-        self.mCollapseTreeButton.setObjectName("toolbarButton")
-        self.mCollapseTreeButton.clicked.connect(self.collapseTree)
-        treeToolsLayout.addWidget(self.mExpandTreeButton)
-        treeToolsLayout.addWidget(self.mCollapseTreeButton)
 
         self.mLeftLayout.addWidget(navTitle)
         self.mLeftLayout.addWidget(navHint)
         self.mLeftLayout.addWidget(self.mSearchEdit)
-        self.mLeftLayout.addWidget(treeTools)
 
         self.mRightPanel = QWidget(self.mSplitter)
         self.mRightPanel.setObjectName("rightPanel")
@@ -183,7 +194,7 @@ class MainWindow(QMainWindow):
         self.mSplitter.setSizes([self.mImageBrowserWidth, 1060])
         self.mSplitter.splitterMoved.connect(self.onSplitterMoved)
 
-        self.mStatusText = QLabel("Drag canvas to pan | Wheel: vertical | Shift+Wheel: horizontal | Ctrl+Wheel: zoom")
+        self.mStatusText = QLabel("Drag canvas to pan | Right-click background: pipeline info | Wheel: vertical | Shift+Wheel: horizontal | Ctrl+Wheel: zoom")
         self.statusBar().addPermanentWidget(self.mStatusText, 1)
 
     def initInspectorDrawer(self):
@@ -333,18 +344,51 @@ class MainWindow(QMainWindow):
             self.mJsonOpend = True
 
     def processHelp(self):
-        version = "V2.0"
-        update = "2024.3.28"
-        aboutInfo = '                                                       \n'\
-                    '    版本信息：%s                \n'\
-                    '    版权所有@Jianlin           \n'\
-                    '    问题反馈：a185531353@qq.com \n'\
-                    '    最后更新时间：%s \n' % (version, update)
-        QMessageBox.about(self, 'About', aboutInfo)
+        version = "V3.0"
+        update = "2026.5.20"
+        aboutInfo = "\n".join([
+            "版本信息：%s" % version,
+            "版权所有：Jianlin",
+            "问题反馈：a185531353@qq.com",
+            "最后更新时间：%s" % update,
+        ])
+        self.showStyledMessage("About", aboutInfo)
 
     def showTips(self):
-        QMessageBox.about(self, 'Tips', "如果遇到导入文件后没有反映\n"
-                                        "需要导入编译生成xml(如：g_xxx_usecase.xml)")
+        self.showStyledMessage("Tips",
+                               "如果遇到导入文件后没有反应\n"
+                               "需要导入编译生成的 XML，例如：g_xxx_usecase.xml")
+
+    def showStyledMessage(self, title, message):
+        box = QMessageBox(self)
+        box.setWindowTitle(title)
+        box.setText(message)
+        box.setIcon(QMessageBox.Information)
+        box.setStandardButtons(QMessageBox.Ok)
+        box.setStyleSheet("""
+            QMessageBox {
+                background-color: #181818;
+                color: #F2F2F2;
+                font-family: "Microsoft YaHei UI";
+            }
+            QLabel {
+                color: #F2F2F2;
+                background: transparent;
+            }
+            QPushButton {
+                color: #E8E8E8;
+                background: #242424;
+                border: 1px solid #5A5A5A;
+                border-radius: 8px;
+                padding: 6px 16px;
+                min-width: 72px;
+            }
+            QPushButton:hover {
+                background: #2D2D2D;
+                border-color: #7A7A7A;
+            }
+        """)
+        box.exec_()
 
     def initUseCase(self):
         Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
@@ -516,11 +560,12 @@ class MainWindow(QMainWindow):
         '''
         Utils.LogD(self.TAG, ("%s: +" % (sys._getframe().f_code.co_name)))
         i = 0
-        self.mZoomScale = 1.0
+        self.mZoomScale = self.DEFAULT_PIPELINE_ZOOM
         self.mBaseLayout.clear()
         self.mSelectedNode = None
         self.mSelectedLink = None
         self.mInspectorMode = "pipeline"
+        self.preparePipelineBaseLayout()
         for node in self.mSelectPipeline.getNodeList():
             # Utils.LogD(self.TAG,
             #            ("%s: " % (sys._getframe().f_code.co_name), node.getNodeName() + node.getNodeInstanceId(),
@@ -540,11 +585,6 @@ class MainWindow(QMainWindow):
                 nodePainter.nodeClicked.connect(self.showNodeDetails)
                 self.mSignal.connect(nodePainter.receviceParentMsg)
                 self.mNodePainterList.append(nodePainter)
-                self.mBaseLayout[node] = {
-                    "pos": QPoint(node.getNodePos()),
-                    "size": QSize(node.getNodeSize()),
-                    "font": fontSize
-                }
                 i += 1
             else:
                 Utils.LogE(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name), node.getNodeName() +
@@ -554,6 +594,7 @@ class MainWindow(QMainWindow):
         self.mCanvas.initPainterInstance(self.mSelectPipeline.getNodeList())
         self.mCanvas.setPortLinkDes(self.mSelectPipeline.getPortLink())
         self.mCanvas.setSelectedLink(None, None)
+        self.refreshZoomedLayout()
 
         max_x = 0
         max_y = 0
@@ -575,6 +616,35 @@ class MainWindow(QMainWindow):
         self.centerCanvas()
         self.hideInspector()
         Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
+
+    def preparePipelineBaseLayout(self):
+        if self.mSelectPipeline is None:
+            return
+        pipeline_key = id(self.mSelectPipeline)
+        cached_layout = self.mPipelineBaseLayoutMap.get(pipeline_key)
+        if cached_layout is None:
+            cached_layout = {}
+            for node in self.mSelectPipeline.getNodeList():
+                if node.getNodePos() is None or node.getNodeSize() is None:
+                    continue
+                font_size = node.getNodeFontSize() if node.getNodeFontSize() is not None else self.mFontSize
+                cached_layout[node] = {
+                    "pos": QPoint(node.getNodePos()),
+                    "size": QSize(node.getNodeSize()),
+                    "font": font_size
+                }
+            self.mPipelineBaseLayoutMap[pipeline_key] = cached_layout
+
+        for node, base in cached_layout.items():
+            node.setNodePos(QPoint(base["pos"]))
+            node.setNodeSize(QSize(base["size"]))
+            node.setNodeFont(base["font"])
+            node.calPortPos()
+            self.mBaseLayout[node] = {
+                "pos": QPoint(base["pos"]),
+                "size": QSize(base["size"]),
+                "font": base["font"]
+            }
 
     def clearWork(self):
         for nodePainter in self.mNodePainterList:
@@ -611,10 +681,41 @@ class MainWindow(QMainWindow):
     def centerCanvas(self):
         if not hasattr(self, "mCanvas"):
             return
-        x = int(self.mCanvasViewport.width() / 2 - self.mCanvasCenterPos.x() * self.mZoomScale)
-        y = int(self.mCanvasViewport.height() / 2 - self.mCanvasCenterPos.y() * self.mZoomScale)
+        bounds = self.getNodeBounds()
+        if bounds is None:
+            x = int(self.CANVAS_MAJOR_GRID - self.mCanvasCenterPos.x() * self.mZoomScale)
+            y = int(self.mCanvasViewport.height() / 2 - self.mCanvasCenterPos.y() * self.mZoomScale)
+        else:
+            min_x, min_y, max_x, max_y = bounds
+            graph_h = max_y - min_y
+            x = int(self.CANVAS_MAJOR_GRID - min_x)
+            y = int((self.mCanvasViewport.height() - graph_h) / 2 - min_y)
         self.mCanvas.move(QPoint(x, y))
         self.mCanvas.update()
+
+    def getNodeBounds(self):
+        if self.mSelectPipeline is None:
+            return None
+        min_x = None
+        min_y = None
+        max_x = None
+        max_y = None
+        for node in self.mSelectPipeline.getNodeList():
+            pos = node.getNodePos()
+            size = node.getNodeSize()
+            if pos is None or size is None:
+                continue
+            node_min_x = pos.x()
+            node_min_y = pos.y()
+            node_max_x = pos.x() + size.width()
+            node_max_y = pos.y() + size.height()
+            min_x = node_min_x if min_x is None else min(min_x, node_min_x)
+            min_y = node_min_y if min_y is None else min(min_y, node_min_y)
+            max_x = node_max_x if max_x is None else max(max_x, node_max_x)
+            max_y = node_max_y if max_y is None else max(max_y, node_max_y)
+        if min_x is None:
+            return None
+        return min_x, min_y, max_x, max_y
 
     def updateCanvasContext(self):
         node_count = 0
@@ -631,15 +732,10 @@ class MainWindow(QMainWindow):
         self.mMetricLinks.setText("Links %d" % link_count)
         self.mMetricZoom.setText("Zoom %d%%" % int(self.mZoomScale * 100))
 
-    def applyCanvasZoom(self, angle_y):
+    def refreshZoomedLayout(self):
         if self.mSelectPipeline is None or len(self.mNodePainterList) == 0:
             return
-        factor = 1.08 if angle_y > 0 else 0.925
-        next_zoom = max(0.55, min(1.9, self.mZoomScale * factor))
-        if abs(next_zoom - self.mZoomScale) < 0.001:
-            return
-
-        self.mZoomScale = next_zoom
+        show_port_labels = self.mZoomScale >= self.PORT_LABEL_MIN_ZOOM
         for nodePainter in self.mNodePainterList:
             node = nodePainter.mNode
             base = self.mBaseLayout.get(node)
@@ -650,13 +746,15 @@ class MainWindow(QMainWindow):
             next_pos = QPoint(int(pos.x() * self.mZoomScale), int(pos.y() * self.mZoomScale))
             next_size = QSize(max(90, int(size.width() * self.mZoomScale)),
                               max(54, int(size.height() * self.mZoomScale)))
+            next_font = max(9, int(base["font"] * self.mZoomScale))
             node.setNodePos(next_pos)
             node.setNodeSize(next_size)
-            node.setNodeFont(max(9, int(base["font"] * self.mZoomScale)))
+            node.setNodeFont(next_font)
             node.calPortPos()
             nodePainter.move(next_pos)
             nodePainter.resize(next_size)
-            nodePainter.setFontSize(max(9, int(base["font"] * self.mZoomScale)))
+            nodePainter.setFontSize(next_font)
+            nodePainter.setShowPortLabels(show_port_labels)
             nodePainter.update()
 
         max_x = self.mCanvasWidth
@@ -669,9 +767,20 @@ class MainWindow(QMainWindow):
         self.updateCanvasViewportSize()
         self.mCanvas.update()
         self.updateCanvasContext()
-        if self.mInspectorMode == "pipeline":
-            self.showPipelineDetails()
-        elif self.mInspectorMode == "node" and self.mSelectedNode is not None:
+
+    def applyCanvasZoom(self, angle_y):
+        if self.mSelectPipeline is None or len(self.mNodePainterList) == 0:
+            return
+        factor = 1.08 if angle_y > 0 else 0.925
+        next_zoom = max(0.55, min(1.9, self.mZoomScale * factor))
+        if abs(next_zoom - self.mZoomScale) < 0.001:
+            return
+
+        self.mZoomScale = next_zoom
+        self.refreshZoomedLayout()
+        if self.mInspector.isHidden():
+            return
+        if self.mInspectorMode == "node" and self.mSelectedNode is not None:
             self.showNodeDetails(self.mSelectedNode)
         elif self.mInspectorMode == "link" and self.mSelectedLink is not None:
             self.showLinkDetails(self.mSelectedLink[0], self.mSelectedLink[1])
@@ -1042,15 +1151,20 @@ class MainWindow(QMainWindow):
                 self.mCanvas.update()
                 return True
 
+        if self.isCanvasSurface(object) and event.type() == QEvent.MouseButtonPress and event.button() == Qt.RightButton:
+            if object == getattr(self, "mCanvas", None):
+                if self.mCanvas.hitTestLink(event.pos()) is None:
+                    self.showPipelineDetails()
+            elif object in (getattr(self, "mCanvasViewport", None), getattr(self, "imageWindow", None)):
+                self.showPipelineDetails()
+            event.accept()
+            return True
+
         if self.isCanvasSurface(object) and event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
             if object == getattr(self, "mCanvas", None):
                 hit = self.mCanvas.hitTestLink(event.pos())
                 if hit is not None:
                     self.showLinkDetails(hit[0], hit[1])
-                else:
-                    self.showPipelineDetails()
-            elif object in (getattr(self, "mCanvasViewport", None), getattr(self, "imageWindow", None)):
-                self.showPipelineDetails()
             self.m_drag = True
             self.m_DragPosition = event.globalPos() - self.mCanvas.pos()
             self.setCursor(QCursor(Qt.ClosedHandCursor))
