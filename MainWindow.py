@@ -71,6 +71,7 @@ class MainWindow(QMainWindow):
         self.mInspectorMode = "pipeline"
         self.mBaseLayout = {}
         self.mPipelineBaseLayoutMap = {}
+        self.mPipelineCurrentLayoutMap = {}
         self.initUI()
 
     def applyNativeDarkTitleBar(self):
@@ -165,12 +166,16 @@ class MainWindow(QMainWindow):
         self.mFitButton = QPushButton("Center View", self.mContextBar)
         self.mFitButton.setObjectName("toolbarButton")
         self.mFitButton.clicked.connect(self.centerCanvas)
+        self.mResetViewButton = QPushButton("Reset View", self.mContextBar)
+        self.mResetViewButton.setObjectName("toolbarButton")
+        self.mResetViewButton.clicked.connect(self.resetPipelineView)
 
         self.mContextLayout.addWidget(titleColumn, 1)
         self.mContextLayout.addWidget(self.mMetricNodes)
         self.mContextLayout.addWidget(self.mMetricLinks)
         self.mContextLayout.addWidget(self.mMetricZoom)
         self.mContextLayout.addWidget(self.mFitButton)
+        self.mContextLayout.addWidget(self.mResetViewButton)
         self.mRightLayout.addWidget(self.mContextBar)
 
         self.mContentSplitter = QSplitter(Qt.Horizontal, self.mRightPanel)
@@ -635,7 +640,8 @@ class MainWindow(QMainWindow):
                 }
             self.mPipelineBaseLayoutMap[pipeline_key] = cached_layout
 
-        for node, base in cached_layout.items():
+        restore_layout = self.mPipelineCurrentLayoutMap.get(pipeline_key, cached_layout)
+        for node, base in restore_layout.items():
             node.setNodePos(QPoint(base["pos"]))
             node.setNodeSize(QSize(base["size"]))
             node.setNodeFont(base["font"])
@@ -645,6 +651,56 @@ class MainWindow(QMainWindow):
                 "size": QSize(base["size"]),
                 "font": base["font"]
             }
+
+    def saveCurrentPipelineLayout(self):
+        if self.mSelectPipeline is None or self.mZoomScale <= 0:
+            return
+        pipeline_key = id(self.mSelectPipeline)
+        current_layout = {}
+        for node in self.mSelectPipeline.getNodeList():
+            pos = node.getNodePos()
+            size = node.getNodeSize()
+            if pos is None or size is None:
+                continue
+            current_layout[node] = {
+                "pos": QPoint(int(pos.x() / self.mZoomScale), int(pos.y() / self.mZoomScale)),
+                "size": QSize(max(1, int(size.width() / self.mZoomScale)),
+                              max(1, int(size.height() / self.mZoomScale))),
+                "font": max(1, int(node.getNodeFontSize() / self.mZoomScale))
+            }
+        self.mPipelineCurrentLayoutMap[pipeline_key] = current_layout
+        self.mBaseLayout.clear()
+        for node, base in current_layout.items():
+            self.mBaseLayout[node] = {
+                "pos": QPoint(base["pos"]),
+                "size": QSize(base["size"]),
+                "font": base["font"]
+            }
+
+    def resetPipelineView(self):
+        if self.mSelectPipeline is None:
+            return
+        pipeline_key = id(self.mSelectPipeline)
+        original_layout = self.mPipelineBaseLayoutMap.get(pipeline_key)
+        if original_layout is None:
+            return
+        self.mPipelineCurrentLayoutMap.pop(pipeline_key, None)
+        self.mBaseLayout.clear()
+        for node, base in original_layout.items():
+            node.setNodePos(QPoint(base["pos"]))
+            node.setNodeSize(QSize(base["size"]))
+            node.setNodeFont(base["font"])
+            node.calPortPos()
+            self.mBaseLayout[node] = {
+                "pos": QPoint(base["pos"]),
+                "size": QSize(base["size"]),
+                "font": base["font"]
+            }
+        self.mZoomScale = self.DEFAULT_PIPELINE_ZOOM
+        self.refreshZoomedLayout()
+        self.centerCanvas()
+        if not self.mInspector.isHidden() and self.mInspectorMode == "pipeline":
+            self.showPipelineDetails()
 
     def clearWork(self):
         for nodePainter in self.mNodePainterList:
@@ -768,16 +824,29 @@ class MainWindow(QMainWindow):
         self.mCanvas.update()
         self.updateCanvasContext()
 
-    def applyCanvasZoom(self, angle_y):
+    def applyCanvasZoom(self, angle_y, anchor_global_pos=None):
         if self.mSelectPipeline is None or len(self.mNodePainterList) == 0:
             return
         factor = 1.08 if angle_y > 0 else 0.925
+        old_zoom = self.mZoomScale
         next_zoom = max(0.55, min(1.9, self.mZoomScale * factor))
         if abs(next_zoom - self.mZoomScale) < 0.001:
             return
 
+        anchor_parent_pos = None
+        anchor_canvas_pos = None
+        if anchor_global_pos is not None and self.mCanvas.parentWidget() is not None:
+            anchor_parent_pos = self.mCanvas.parentWidget().mapFromGlobal(anchor_global_pos)
+            anchor_canvas_pos = anchor_parent_pos - self.mCanvas.pos()
+
         self.mZoomScale = next_zoom
         self.refreshZoomedLayout()
+        if anchor_parent_pos is not None and anchor_canvas_pos is not None and old_zoom > 0:
+            ratio = self.mZoomScale / old_zoom
+            next_canvas_pos = anchor_parent_pos - QPoint(int(anchor_canvas_pos.x() * ratio),
+                                                         int(anchor_canvas_pos.y() * ratio))
+            self.mCanvas.move(next_canvas_pos)
+            self.mCanvas.update()
         if self.mInspector.isHidden():
             return
         if self.mInspectorMode == "node" and self.mSelectedNode is not None:
@@ -993,6 +1062,7 @@ class MainWindow(QMainWindow):
         if msgType == MsgType.LeftButton:
             self.leftPress = msgValue
             if self.leftPress == False:
+                self.saveCurrentPipelineLayout()
                 self.mCanvas.update()
         elif msgType == MsgType.WheelMouse:
             self.mCanvas.update()
@@ -1021,7 +1091,7 @@ class MainWindow(QMainWindow):
         step = int(angleY * 2.5)
         if self.mMouseInBrowser is False:
             if self.mKeyCtrlStatus:
-                self.applyCanvasZoom(angleY)
+                self.applyCanvasZoom(angleY, event.globalPos())
             elif self.mKeyShiftStatus:
                 self.mCanvas.move(self.mCanvas.pos() + QPoint(step, 0))
             else:
@@ -1181,7 +1251,7 @@ class MainWindow(QMainWindow):
             angle = event.angleDelta() / 8
             angleY = angle.y()
             if self.mKeyCtrlStatus:
-                self.applyCanvasZoom(angleY)
+                self.applyCanvasZoom(angleY, event.globalPos())
             elif self.mKeyShiftStatus:
                 self.mCanvas.move(self.mCanvas.pos() + QPoint(int(angleY * 2.5), 0))
             else:
