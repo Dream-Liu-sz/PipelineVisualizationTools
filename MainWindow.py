@@ -53,6 +53,7 @@ class MainWindow(QMainWindow):
         self.mKeyShiftStatus = False
         self.mMouseInBrowser = False
         self.mKeyCtrlStatus = False
+        self.mJsonOpend = False;
         self.initUI()
 
 
@@ -89,14 +90,20 @@ class MainWindow(QMainWindow):
 
     def initMenu(self):
         Utils.LogD(self.TAG, "initMenu+")
-        openImageFolderAct = QAction("open", self)
+        openImageFolderAct = QAction("open xml file", self)
         openImageFolderAct.setStatusTip("Select Xml file")
         openImageFolderAct.setShortcut("Ctrl+O")
         openImageFolderAct.triggered.connect(self.triggerOpenFile)
 
+        openDirImageFolderAct = QAction("open json file", self)
+        openDirImageFolderAct.setStatusTip("Select Json file")
+        openDirImageFolderAct.setShortcut("Ctrl+Alt+O")
+        openDirImageFolderAct.triggered.connect(self.triggerOpenFiles)
+
         menubar = self.menuBar()
         fileMenu = menubar.addMenu('File')
         fileMenu.addAction(openImageFolderAct)
+        fileMenu.addAction(openDirImageFolderAct)
 
         aboutAct = QAction("about", self)
         aboutAct.setStatusTip("about")
@@ -137,9 +144,37 @@ class MainWindow(QMainWindow):
             self.imageBrowser.clear()
             self.initUseCase()
 
+    def triggerOpenFiles(self, q):
+        # directory1 = QFileDialog.getExistingDirectory(self,
+        #                                               "选取文件夹",
+        #                                               "./")  # 起始路径
+        # rootdir = r"C:\Users\lx\Documents"
+        rootdir = r"Y:\workspace\code\aero_vendor_do\vendor\noth\hardware\camera\src\extened\config\aero\pipelinedescription"
+        # folder_path = QFileDialog.getExistingDirectory(self, "选择文件夹", rootdir)
+
+        # self.mFileName, self.mFiletype = QFileDialog.getOpenFileName(self,
+        #                                                   "选取文件",
+        #                                                   rootdir,
+        #                                                   "Xml Files (*.xml);;All Files (*)")
+
+        self.mFileName, self.mFiletype = QFileDialog.getOpenFileNames(self,
+                                                                      "选取文件",
+                                                                      rootdir,
+                                                                      "Json Files (*.json);;All Files (*)")
+        #
+        # fileName2, ok2 = QFileDialog.getSaveFileName(self,
+        #                                              "文件保存",
+        #                                              "./",
+        #                                              "All Files (*);;Text Files (*.txt)")
+        if len(self.mFileName) > 0 and str(self.mFileName).find("json") > 0:
+            self.imageBrowser.clear()
+            print(self.mFileName)
+            self.initAllJsonPipeline()
+            self.mJsonOpend = True
+
     def processHelp(self):
-        version = "V1.4"
-        update = "2022.6.24"
+        version = "V2.0"
+        update = "2024.3.28"
         aboutInfo = '                                                       \n'\
                     '    版本信息：%s                \n'\
                     '    版权所有@Jianlin           \n'\
@@ -155,8 +190,21 @@ class MainWindow(QMainWindow):
         Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
         Utils.LogI(self.TAG, ("Select file is " + self.mFileName))
         # 创建跟节点
-        self.mUseCase = UseCaseDes(str(self.mFileName))
+        self.mUseCase = UseCaseDes(str(self.mFileName), "")
         self.mUseCase.useCaseTranslation()
+        self.updateTreeWidget()
+        # self.root1 = QTreeWidgetItem(self.imageBrowser)
+        # self.root1.setText(0, '2UseCase')
+        # 默认展开
+        # self.imageBrowser.expandAll()
+        Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
+
+    def initAllJsonPipeline(self):
+        Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
+
+        # 创建跟节点
+        self.mUseCase = UseCaseDes(self.mFileName, "NCFJsonUses")
+        self.mUseCase.useCaseTranslationJson()
         self.updateTreeWidget()
         # self.root1 = QTreeWidgetItem(self.imageBrowser)
         # self.root1.setText(0, '2UseCase')
@@ -214,6 +262,7 @@ class MainWindow(QMainWindow):
         '''
             @Func:给左侧树形选择栏添加item
         '''
+        print(self.mUseCase.getPipelineMap().keys())
         for useCase in self.mUseCase.getPipelineMap().keys():
             root = QTreeWidgetItem(self.imageBrowser)
             root.setText(0, useCase)
@@ -222,6 +271,8 @@ class MainWindow(QMainWindow):
                 pipelineItem = QTreeWidgetItem(root)
                 pipelineItem.setText(0, pipeline.getPipelineName())
                 pipelineItem.setForeground(0, QColor(200, 200, 200))
+
+        Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
 
     def initImageWindow(self):
         '''
@@ -293,7 +344,7 @@ class MainWindow(QMainWindow):
                 node.setColor(colorList[i])
                 fontSize = node.getNodeFontSize() if node.getNodeFontSize() is not None else self.mFontSize
                 node.setNodeFont(fontSize)
-                nodePainter = NodePainter(self.mCanvas, node, fontSize)
+                nodePainter = NodePainter(self.mCanvas, node, fontSize, self.mJsonOpend)
                 node.calPortPos()
                 nodePainter.move(node.getNodePos())
                 nodePainter.lower()

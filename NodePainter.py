@@ -10,7 +10,7 @@ class NodePainter(QFrame):
     TAG = "NodePainter"
 
     signal = pyqtSignal(ComMsg)
-    def __init__(self, parent, node, fontSize):
+    def __init__(self, parent, node, fontSize, jsonOpened):
         super(NodePainter ,self).__init__(parent)
         Utils.LogD(self.TAG, "__init__ +")
         self.setPalette(QPalette(Qt.black))
@@ -42,6 +42,7 @@ class NodePainter(QFrame):
         self.mKeyCtrlStatus = False
         self.mHoverMoveStatus = False
         self.mPressed = False
+        self.mJsonOpend = jsonOpened
 
     def connectParentSlot(self, slot):
         '''
@@ -89,11 +90,17 @@ class NodePainter(QFrame):
         self.mNode.calPortPos()
         for port in self.mNode.getInputPort():
             portName = port.getPortNamePrune() if port.getPortNamePrune() is not None else port.getPortName()
-            p.drawText(port.getPortPos(), portName + "_" + port.getPortId())
+            if self.mJsonOpend:
+                p.drawText(port.getPortPos(), portName)
+            else:
+                p.drawText(port.getPortPos(), portName + "_" + port.getPortId())
 
         for port in self.mNode.getOutputPort():
             portName = port.getPortNamePrune() if port.getPortNamePrune() is not None else port.getPortName()
-            p.drawText(port.getPortPos() - QPoint(17, 0), portName + "_" + port.getPortId())
+            if self.mJsonOpend:
+                p.drawText(port.getPortPos(), portName)
+            else:
+                p.drawText(port.getPortPos() - QPoint(17, 0), portName + "_" + port.getPortId())
         # if self.shape == "Line":
         #     p.drawLine(rect.topLeft(), rect.bottomRight())
         # elif self.shape == "Rectangle":

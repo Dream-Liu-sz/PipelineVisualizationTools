@@ -20,6 +20,9 @@ class PortDes(object):
         self.mHeight = 0
         self.mTargetPort = False
 
+    def __str__(self):
+        return str("port_%s_%s_%s" % (self.mNodeId, self.mNodeInstanceId, self.mPortId))
+
     def setTargetPort(self, b):
         self.mTargetPort = b
 

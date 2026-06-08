@@ -250,7 +250,7 @@ class NodeDes(object):
             @Func:计算是否需要 Purne
             @direction: True 为input，False 为Output
         '''
-        Utils.LogV(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
+        Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
         for port in portList:
             xOffset, yOffset = self.calOverlap(port, direction)
             if direction:
@@ -260,7 +260,7 @@ class NodeDes(object):
                 if xOffset > 0:
                     # Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
                     return True
-        Utils.LogV(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
+        Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
         return False
 
     def pruneInputPortName(self):
@@ -277,7 +277,7 @@ class NodeDes(object):
                 if idx < 0:
                     idx = 0
                 pruneName = portName[idx:len(portName)]
-                # Utils.LogD(self.TAG, ("%s: + %s" % (sys._getframe().f_code.co_name, pruneName)))
+                Utils.LogD(self.TAG, ("prune port name", pruneName))
                 inputPort.setPortNamePrune(pruneName)
                 inputPort.setWidth(metrics.width(pruneName))
 
@@ -298,7 +298,7 @@ class NodeDes(object):
                     if idx < 0:
                         idx = 0
                     pruneName = portName[idx:len(portName)]
-                    # Utils.LogD(self.TAG, ("%s: -- prune %s " % (sys._getframe().f_code.co_name, pruneName)))
+                    Utils.LogD(self.TAG, ("prune port name", pruneName))
                     outputPort.setPortNamePrune(pruneName)
                     outputPort.setWidth(metrics.width(pruneName))
 
@@ -422,6 +422,7 @@ class NodeDes(object):
             portName = outputPort.getPortNamePrune() if outputPort.getPortNamePrune() is not None else outputPort.getPortName()
             textWidth = metrics.width(portName)
             pos = QPoint(self.mNodeSize.width() - textWidth, outputPortPortion * i)
+            Utils.LogD(self.TAG, ("%s: name %s textWidth %d pos %s" % (outputPort, portName, textWidth, pos)))
             outputPort.setPortPos(pos)
             xOffset, yOffset = self.calOverlap(outputPort, False)
             if xOffset > 0 and yOffset != 0:
@@ -529,11 +530,9 @@ class NodeDes(object):
                             childInputPort.setParentNodePos(self.mNodePos)
                             childInputPort.setWidth(textWidth)
                             childInputPort.setHeight(textHeight)
-                            # Utils.LogD(self.TAG, ("%s: + match outputPort %s, cuNode input %s, this %s" % (
-                            #     sys._getframe().f_code.co_name, outputPort.getPortName(),
-                            #     inputPort.getPortName() + inputPort.getNodeId() + "_" + inputPort.getNodeInstanceId(),
-                            #     childInputPort.getPortName() + childInputPort.getNodeId() + "_" + childInputPort.getNodeInstanceId()),
-                            #                       childInputPort.getPortPos()))
+                            # Utils.LogD(self.TAG, ("+ match outputPort %s, cuNode input %s, this %s" % (
+                            #     outputPort.getPortName(), inputPort.getPortName() + inputPort.getNodeId() + "_" + inputPort.getNodeInstanceId(),
+                            #     childInputPort.getPortName() + childInputPort.getNodeId() + "_" + childInputPort.getNodeInstanceId()), childInputPort.getPortPos()))
                             tempList.append(childInputPort)
                             i += 1
 

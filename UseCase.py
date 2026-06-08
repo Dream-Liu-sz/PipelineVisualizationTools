@@ -5,16 +5,24 @@ from Port import PortDes
 from Pipeline import PipelineDes
 from Utils import Utils
 import sys
+import json5
 
 class UseCaseDes(object):
     TAG = "UseCaseDes"
-    mFileName = ""
+    mjsonName = ""
     mRoot = None
 
-    def __init__(self, fileName):
-        self.mFileName = fileName
+    def __init__(self, fileName, usecaseName:str):
+        Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
+        if isinstance(fileName, str):
+            self.mFileName = fileName
+        elif isinstance(fileName, list):
+            self.mFileList = fileName
         self.mUseCasePipelineMap = dict()
         self.mParent = None
+        self.mjsonName = usecaseName
+        self.mJsonDataList = []
+        Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
 
     def useCaseTranslation(self):
         '''
@@ -37,6 +45,29 @@ class UseCaseDes(object):
             self.pipelineTranslation(useCase, useCasePipelineNameList)
             temp = {useCaseNameList[0].text: useCasePipelineNameList}
             self.mUseCasePipelineMap.update(temp)
+
+        Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
+
+    def useCaseTranslationJson(self):
+        '''
+            @Func:解析useCase
+        '''
+        Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
+
+        for fileName in self.mFileList:
+            with open(fileName, 'r', encoding='utf-8') as file:
+                try:
+                    jsonData = json5.load(file)
+                    print(jsonData)
+                    self.mJsonDataList.append(jsonData)
+                except json5.JSONDecodeError:
+                    Utils.LogE(self.TAG, "failed to parse json")
+
+        useCasePipelineNameList = []
+        Utils.LogE(self.TAG, "usecase name %s" % (self.mjsonName))
+        self.pipelineTranslationJson(self.mJsonDataList, useCasePipelineNameList)
+        temp = {self.mjsonName: useCasePipelineNameList}
+        self.mUseCasePipelineMap.update(temp)
 
         Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
 
@@ -63,6 +94,22 @@ class UseCaseDes(object):
 
             pipelineListAll.append(pipelineDes)
 
+    def pipelineTranslationJson(self, pipelineJsonDataList, outPipelineList):
+        '''
+            @Func:解析pipeline
+        '''
+
+        for pipeline in pipelineJsonDataList:
+            pipelineDes = PipelineDes()
+            pipelineDes.setPipelineName(str(pipeline["PipelineName"]))
+
+            Utils.LogI(self.TAG, ("pipeline %s:" % (pipelineDes.getPipelineName())))
+            self.nodesTranslationJson(pipeline, pipelineDes)
+            self.portTranslationJson(pipeline, pipelineDes)
+            self.addMissNode(pipelineDes)
+
+            outPipelineList.append(pipelineDes)
+
     def nodesTranslation(self, pipeline, pipelineDes):
         '''
             @Func:解析Node
@@ -88,6 +135,36 @@ class UseCaseDes(object):
                     nodePropertyValue = nodeProp.findall("NodePropertyValue")[0].text if len(nodeProp.findall("NodePropertyValue")) != 0 else "None"
 
                     nodeDes.setNodePorp(nodePropertyName, nodePropertyId, nodePropertyDataType, nodePropertyValue)
+
+    def nodesTranslationJson(self, pipeline, pipelineDes):
+        '''
+            @Func:解析Node
+        '''
+        Utils.LogD(self.TAG, " + ")
+        nodesList = pipeline["Nodes"]["Node"]
+        print(nodesList)
+        if len(nodesList) < 1:
+            Utils.LogE(self.TAG, "pipelineList length < 1")
+
+        for node in nodesList:
+            if isinstance(nodesList, list) is False:
+                node = nodesList
+
+            nodeDes = NodeDes(str(node["NodeName"]),
+                              str(node["NodeId"]),
+                              str(node["NodeInstance"]),
+                              str(node["NodeInstance"]))
+            pipelineDes.addNode(nodeDes)
+
+            nodePropertyList = node["NodeProperties"]
+            for nodeProp in nodePropertyList:
+                nodePropertyName = str(nodeProp["NodePropertyName"]) if "NodePropertyName" in nodeProp else "None"
+                nodePropertyId = str(nodeProp["Id"]) if "Id" in nodeProp else "None"
+                nodePropertyDataType = str(nodeProp["NodePropertyDataType"]) if "NodePropertyDataType" in nodeProp else "None"
+                nodePropertyValue = str(nodeProp["Value"]) if "Value" in nodeProp else "None"
+
+                nodeDes.setNodePorp(nodePropertyName, nodePropertyId, nodePropertyDataType, nodePropertyValue)
+        Utils.LogD(self.TAG, " - ")
 
     def portTranslation(self, pipeline, pipelineDes):
         portLinkagesList = pipeline.findall("PortLinkages")
@@ -154,10 +231,80 @@ class UseCaseDes(object):
                         pipelineDes.addNode(nodeDes)
                 pipelineDes.updatePortToProtMap(srcPortDes, dstPortListAll)
 
+    def portTranslationJson(self, pipeline, pipelineDes):
+        Utils.LogD(self.TAG, " + ")
+        portLinkagesList = pipeline["PortLinks"]
+        if len(portLinkagesList) < 1:
+            Utils.LogE(self.TAG, "portLinkages length < 1")
+
+        for portLinkages in portLinkagesList:
+            if isinstance(portLinkagesList, list) is False:
+                portLinkages = portLinkagesList
+            # sourceNodeList = portLinkages.findall("SourceNode")
+            # targetNameList = portLinkages.findall("TargetName")
+            #
+            # for sourceNode in sourceNodeList:
+            #     pipelineDes.addSrcNodeName(sourceNode.text)
+            #
+            #     # Utils.LogV(self.TAG, ("add source %s" % (sourceNode.text)))
+            #
+            # for targetName in targetNameList:
+            #     pipelineDes.addSrcNodeName(targetName.text)
+            #     # Utils.LogV(self.TAG, ("add targe %s" % (targetName.text)))
+
+            linkList = portLinkages["Link"]
+            for port in linkList:
+                srcPortList = port["SrcPort"]
+                portId = str(srcPortList["PortId"])
+                nodeName = str(srcPortList["NodeName"])
+                nodeId = str(srcPortList["NodeId"])
+                nodeInstance = str(srcPortList["NodeInstance"])
+                nodeInstanceId = str(srcPortList["NodeInstance"])
+                portName = "port_" + portId
+                srcPortDes = PortDes(portName, portId, nodeName, nodeId, nodeInstance, nodeInstanceId)
+                # target 做为 srcNode 时，需要认为其时一个node
+                # if portName.find("TARGET") == 0:
+                #     nodeDes = NodeDes(nodeName, nodeId, nodeInstance, nodeInstanceId, portName)
+                #     # nodeDes.setTargetNode(True)
+                #     pipelineDes.addNode(nodeDes)
+                # Utils.LogV(self.TAG, ("find src %s_%s" % (srcPortList[0].findall("PortName")[0].text, srcPortList[0].findall("PortId")[0].text)))
+
+                dstPortListAll = []
+                dstPortList = port["DstPort"]
+                portId = str(dstPortList["PortId"])
+                nodeName = str(dstPortList["NodeName"])
+                nodeId = str(dstPortList["NodeId"])
+                nodeInstance = str(dstPortList["NodeInstance"])
+                nodeInstanceId = str(dstPortList["NodeInstance"])
+                portName = "port_" + portId
+                dstPortDes = PortDes(portName, portId, nodeName, nodeId, nodeInstance, nodeInstanceId)
+                '''
+                # 判断这个port是否已经被添加，如果是会返回这个port的实例，然后被添加到另一组outputPort --> inputPort中
+                # 这样做的原因是相同portId nodeId nodeInstanceId 的 port只需要一个实例，不然后面match的时候会出问题
+                '''
+                onlyPortInstance = pipelineDes.isPortExist(dstPortDes)
+                if onlyPortInstance == None:
+                    dstPortListAll.append(dstPortDes)
+                else:
+                    dstPortListAll.append(onlyPortInstance)
+
+
+                # # TARGET BUFFER Port 也作为 node
+                # if portName.find("TARGET") == 0:
+                #     dstPortDes.setTargetPort(True)
+                #     nodeDes = NodeDes(nodeName, nodeId, nodeInstance, nodeInstanceId, portName)
+                #     nodeDes.setTargetNode(True)
+                #     pipelineDes.addNode(nodeDes)
+                # if
+                pipelineDes.updatePortToProtMap(srcPortDes, dstPortListAll)
+
+        Utils.LogD(self.TAG, " - ")
+
     def addMissNode(self, pipeline):
         '''
             @Func:有些pipeline，link上的port使用了nodeList中没有的Node，需要把这些node也添加进来
         '''
+        Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
         nodeList = pipeline.getNodeList()
         portLink = pipeline.getPortLink()
 
@@ -191,6 +338,8 @@ class UseCaseDes(object):
                                       inputPort.getNodeInstance(),
                                       inputPort.getNodeInstanceId())
                     pipeline.addNode(nodeDes)
+
+        Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
 
     def buildPipeline(self, useCase, pipelineName, point, fontSize, parentWidget):
         Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))

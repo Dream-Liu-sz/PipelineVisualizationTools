@@ -60,7 +60,7 @@ class PipelineDes(object):
             portList = self.mPortLinkDes.get(srcPort)
             for port in dstPortList:
                 portList.append(port)
-            temp = {srcPort: dstPortList}
+            temp = {srcPort: portList}
         else:
             temp = {srcPort: dstPortList}
 
