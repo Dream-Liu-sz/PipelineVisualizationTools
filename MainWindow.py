@@ -1,13 +1,13 @@
 from PyQt5.Qt import QPoint, QSize
 from PyQt5.Qt import QMessageBox
 from PyQt5.Qt import QMainWindow
-from PyQt5.QtCore import Qt, QEvent, QSettings, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QEvent, QRect, QSettings, QTimer, pyqtSignal
 from PyQt5.Qt import QPalette
 from PyQt5.Qt import QIcon
 from PyQt5.Qt import QAction
 from PyQt5.QtGui import QColor, QCursor, QFont, QFontMetrics, QPalette, QPixmap, QPainter, QIcon, QPen
 from PyQt5.QtWidgets import QTreeWidget, QAbstractItemView, QHeaderView, QFrame, QTreeWidgetItem, QWidget, QFileDialog, \
-    QLabel, QSplitter, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QSizePolicy
+    QLabel, QSplitter, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QSizePolicy, QApplication
 
 from CanvasWidget import CanvasImage
 from NodePainter import NodePainter
@@ -30,6 +30,8 @@ class MainWindow(QMainWindow):
     CANVAS_MAJOR_GRID = 160
     EXPLORER_MIN_WIDTH = 220
     INSPECTOR_DEFAULT_WIDTH = 294
+    SNAPSHOT_BUTTON_SIZE = 54
+    SNAPSHOT_MARGIN = 120
     LAST_OPEN_DIR_KEY = "fileDialog/lastOpenDir"
     DEFAULT_XML_DIR = r"D:\workspace\tools\PipelineTools"
     DEFAULT_JSON_DIR = r"Y:\workspace\code\aero_vendor_do\vendor\noth\hardware\camera\src\extened\config\aero\pipelinedescription"
@@ -110,6 +112,7 @@ class MainWindow(QMainWindow):
         self.initImageWindow()
         self.initLable()
         self.initTimer()
+        self.initSnapshotButton()
         self.enableFileDropTargets()
         self.updateCanvasContext()
 
@@ -266,6 +269,7 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "mInspector"):
             return
         self.mInspector.raise_()
+        self.positionSnapshotButton()
 
     def initLable(self):
         self.mLabel = QLabel(self)
@@ -287,6 +291,64 @@ class MainWindow(QMainWindow):
         self.timer= QTimer()
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self.timeSlot)
+
+    def initSnapshotButton(self):
+        self.mSnapshotButton = QPushButton(self)
+        self.mSnapshotButton.setFixedSize(self.SNAPSHOT_BUTTON_SIZE, self.SNAPSHOT_BUTTON_SIZE)
+        self.mSnapshotButton.setIcon(self.createSnapshotIcon())
+        self.mSnapshotButton.setIconSize(QSize(28, 28))
+        self.mSnapshotButton.setToolTip("Save pipeline snapshot as JPEG")
+        self.mSnapshotButton.setCursor(QCursor(Qt.PointingHandCursor))
+        self.mSnapshotButton.clicked.connect(self.snapshotPipeline)
+        self.mSnapshotButton.setStyleSheet("""
+            QPushButton {
+                background: #F2F2F2;
+                border: 1px solid #FFFFFF;
+                border-radius: 27px;
+            }
+            QPushButton:hover {
+                background: #FFFFFF;
+                border-color: #D8D8D8;
+            }
+            QPushButton:pressed {
+                background: #DADADA;
+            }
+        """)
+        self.positionSnapshotButton()
+        self.mSnapshotButton.raise_()
+
+    def createSnapshotIcon(self):
+        pixmap = QPixmap(28, 28)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        body = QColor("#202020")
+        lens = QColor("#F2F2F2")
+        painter.setPen(QPen(body, 2))
+        painter.setBrush(body)
+        painter.drawRoundedRect(4, 8, 20, 15, 4, 4)
+        painter.drawRoundedRect(8, 5, 7, 5, 2, 2)
+        painter.setPen(QPen(lens, 2))
+        painter.setBrush(QColor("#202020"))
+        painter.drawEllipse(10, 11, 8, 8)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(lens)
+        painter.drawEllipse(20, 10, 2, 2)
+        painter.end()
+        return QIcon(pixmap)
+
+    def positionSnapshotButton(self):
+        if not hasattr(self, "mSnapshotButton"):
+            return
+        offset = 0
+        if hasattr(self, "mInspector") and self.mInspector.isVisible():
+            offset = self.mInspector.width() + 12
+        status_height = self.statusBar().height() if self.statusBar() is not None else 0
+        size = self.SNAPSHOT_BUTTON_SIZE
+        x = max(16, self.width() - offset - size - 22)
+        y = max(16, self.height() - status_height - size - 18)
+        self.mSnapshotButton.move(x, y)
+        self.mSnapshotButton.raise_()
 
     def initMenu(self):
         Utils.LogD(self.TAG, "initMenu+")
@@ -946,6 +1008,55 @@ class MainWindow(QMainWindow):
             return None
         return min_x, min_y, max_x, max_y
 
+    def getSnapshotRect(self):
+        bounds = self.getNodeBounds()
+        if bounds is None:
+            return None
+        min_x, min_y, max_x, max_y = bounds
+        margin = self.SNAPSHOT_MARGIN
+        left = max(0, int(min_x - margin))
+        top = max(0, int(min_y - margin))
+        right = min(self.mCanvas.width(), int(max_x + margin))
+        bottom = min(self.mCanvas.height(), int(max_y + margin))
+        if right <= left or bottom <= top:
+            return None
+        return QRect(left, top, right - left, bottom - top)
+
+    def snapshotFileDefaultPath(self):
+        name = self.mCurrentPipelineName if self.mCurrentPipelineName else "pipeline"
+        safe_name = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in name)
+        safe_name = safe_name.strip("_") or "pipeline"
+        directory = self.getLastOpenDir(os.path.dirname(os.path.abspath(__file__)))
+        return os.path.join(directory, "%s_snapshot.jpg" % safe_name)
+
+    def snapshotPipeline(self):
+        if self.mSelectPipeline is None or len(self.mNodePainterList) == 0:
+            self.showStyledMessage("Snapshot", "Please render a pipeline before saving a snapshot.")
+            return
+
+        fileName, _ = QFileDialog.getSaveFileName(self,
+                                                  "Save pipeline snapshot",
+                                                  self.snapshotFileDefaultPath(),
+                                                  "JPEG Images (*.jpg *.jpeg)")
+        if not fileName:
+            return
+        if not fileName.lower().endswith((".jpg", ".jpeg")):
+            fileName += ".jpg"
+
+        snapshotRect = self.getSnapshotRect()
+        if snapshotRect is None:
+            self.showStyledMessage("Snapshot", "No pipeline content is available to save.")
+            return
+
+        self.mCanvas.update()
+        QApplication.processEvents()
+        pixmap = self.mCanvas.grab(snapshotRect)
+        if pixmap.isNull() or not pixmap.save(fileName, "JPEG", 95):
+            self.showStyledMessage("Snapshot", "Failed to save the JPEG snapshot.")
+            return
+
+        self.statusBar().showMessage("Saved snapshot: %s" % fileName, 5000)
+
     def updateCanvasContext(self):
         node_count = 0
         link_count = 0
@@ -1058,10 +1169,12 @@ class MainWindow(QMainWindow):
             self.mContentSplitter.setSizes([max(520, self.mContentSplitter.width() - self.mInspectorDefaultWidth),
                                             self.mInspectorDefaultWidth])
         self.mInspector.raise_()
+        self.positionSnapshotButton()
 
     def hideInspector(self):
         if hasattr(self, "mInspector"):
             self.mInspector.hide()
+        self.positionSnapshotButton()
 
     def setInspectorTree(self, title, subtitle):
         self.ensureInspectorVisible()
@@ -1482,5 +1595,6 @@ class MainWindow(QMainWindow):
     def resizeEvent(self, event):
         self.updateBrowserSize()
         self.updateCanvasContext()
+        self.positionSnapshotButton()
         # Utils.LogD(self.TAG,
         #            ("%s: - self.mImageBrowserWidth %d" % (sys._getframe().f_code.co_name, self.mImageBrowserWidth)))
