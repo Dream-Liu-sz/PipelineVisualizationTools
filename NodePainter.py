@@ -1,5 +1,5 @@
 from PyQt5.QtCore import Qt, pyqtSignal, QRect, QPoint, QSize, QEvent
-from PyQt5.QtGui import QPalette, QPen, QBrush, QFont, QPainter, QCursor, QColor
+from PyQt5.QtGui import QPalette, QPen, QBrush, QFont, QPainter, QCursor, QColor, QFontMetrics
 from PyQt5.QtWidgets import QFrame
 
 from Utils import Utils
@@ -99,9 +99,10 @@ class NodePainter(QFrame):
 
         header = QRect(card.left() + 14, card.top() + 9, card.width() - 28, 30)
         p.setPen(QColor(COLORS["text"]))
-        self.mNodeFont = font(max(9, int(self.mFontSize * 0.58)), bold=True)
-        p.setFont(self.mNodeFont)
         node_title = self.mNode.getNodeName() + "_" + str(self.mNode.getNodeInstanceId())
+        title_size = self.fitTextPointSize(node_title, header.width(), max(8, int(self.mFontSize * 0.58)), 7)
+        self.mNodeFont = font(title_size, bold=True)
+        p.setFont(self.mNodeFont)
         p.drawText(header, Qt.AlignLeft | Qt.AlignVCenter, node_title)
 
         self.mNodeFont = font(max(8, int(self.mFontSize * 0.44)), mono=True)
@@ -184,6 +185,15 @@ class NodePainter(QFrame):
     def setShowPortLabels(self, show):
         self.mShowPortLabels = show
         self.update()
+
+    def fitTextPointSize(self, text, max_width, preferred_size, min_size):
+        size = max(min_size, preferred_size)
+        while size > min_size:
+            metrics = QFontMetrics(font(size, bold=True))
+            if metrics.horizontalAdvance(text) <= max_width:
+                return size
+            size -= 1
+        return min_size
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton and self.mHoverMoveStatus is False:

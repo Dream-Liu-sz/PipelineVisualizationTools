@@ -354,41 +354,23 @@ class NodeDes(object):
         Utils.LogV(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
         inputPortLength = len(self.mInputPortList)
         outputPortLength = len(self.mOutputPortList)
-        inputPortPortion = int(self.mNodeSize.height() / (inputPortLength + 1))
-        prePortY = 0
-        i = 1
-        for inputPort in self.mInputPortList:
-            pos = QPoint(0, prePortY + inputPortPortion)
+        inputPortPortion = int(self.mNodeSize.height() / (inputPortLength + 1)) if inputPortLength > 0 else 0
+        for i, inputPort in enumerate(self.mInputPortList, start=1):
+            pos = QPoint(0, inputPortPortion * i)
             inputPort.setPortPos(pos)
             inputPort.setParentNodePos(self.mNodePos)
-            xOffset, yOffset = self.calOverlap(inputPort, True)
-            if xOffset < 0 and yOffset != 0:
-                pos = pos + QPoint(0, yOffset)
-                # Utils.LogD(self.TAG, ("%s: change port %s --> y %d" % (
-                # sys._getframe().f_code.co_name, inputPort.getPortName(), yOffset)))
-                inputPort.setPortPos(pos)
-            prePortY = pos.y()
-            i += 1
 
         self.mFont.setPixelSize(self.mFontSize - 6)
         metrics = QFontMetrics(self.mFont)
-        outputPortPortion = int(self.mNodeSize.height() / (outputPortLength + 1))
-        i = 1
-        for outputPort in self.mOutputPortList:
+        outputPortPortion = int(self.mNodeSize.height() / (outputPortLength + 1)) if outputPortLength > 0 else 0
+        for i, outputPort in enumerate(self.mOutputPortList, start=1):
             portName = outputPort.getPortNamePrune() if outputPort.getPortNamePrune() is not None else outputPort.getPortName()
             textWidth = metrics.width(portName)
             pos = QPoint(self.mNodeSize.width() - textWidth, outputPortPortion * i)
             Utils.LogD(self.TAG, ("%s: name %s textWidth %d pos %s" % (outputPort, portName, textWidth, pos)))
             outputPort.setPortPos(pos)
-            xOffset, yOffset = self.calOverlap(outputPort, False)
-            if xOffset > 0 and yOffset != 0:
-                pos = pos + QPoint(0, yOffset)
-                # Utils.LogD(self.TAG, ("%s: change port %s --> y %d" % (
-                # sys._getframe().f_code.co_name, outputPort.getPortName(), yOffset)))
-                outputPort.setPortPos(pos)
             outputPort.setWidth(textWidth)
             outputPort.setParentNodePos(self.mNodePos)
-            i += 1
 
         Utils.LogV(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
 

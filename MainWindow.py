@@ -27,6 +27,8 @@ class MainWindow(QMainWindow):
     DEFAULT_PIPELINE_ZOOM = 0.62
     PORT_LABEL_MIN_ZOOM = 0.78
     CANVAS_MAJOR_GRID = 160
+    EXPLORER_MIN_WIDTH = 220
+    INSPECTOR_DEFAULT_WIDTH = 294
     mSignal = pyqtSignal(ComMsg)
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
@@ -34,7 +36,7 @@ class MainWindow(QMainWindow):
         self.resize(1280, 720)
         # self.setCentralWidget(self.mCanvas)
         # self.func()
-        self.mImageBrowserWidth = 220
+        self.mImageBrowserWidth = self.EXPLORER_MIN_WIDTH
         self.mVlayoutInstalMap = dict()
         self.mNodePainterList = []
         self.mDrawLinePainterList = []
@@ -75,6 +77,7 @@ class MainWindow(QMainWindow):
         self.mExplorerVisible = True
         self.mLastExplorerWidth = self.mImageBrowserWidth
         self.initUI()
+        QTimer.singleShot(0, self.applyDefaultPanelWidths)
 
     def applyNativeDarkTitleBar(self):
         if sys.platform != "win32":
@@ -118,10 +121,10 @@ class MainWindow(QMainWindow):
 
         self.mLeftPanel = QWidget(self.mSplitter)
         self.mLeftPanel.setObjectName("leftPanel")
-        self.mLeftPanel.setMinimumWidth(220)
+        self.mLeftPanel.setMinimumWidth(self.EXPLORER_MIN_WIDTH)
         self.mLeftPanel.setMaximumWidth(460)
         self.mLeftLayout = QVBoxLayout(self.mLeftPanel)
-        self.mLeftLayout.setContentsMargins(0, 0, 10, 0)
+        self.mLeftLayout.setContentsMargins(0, 0, 0, 0)
         self.mLeftLayout.setSpacing(10)
 
         navTitle = QLabel("Pipeline Explorer", self.mLeftPanel)
@@ -189,7 +192,7 @@ class MainWindow(QMainWindow):
         self.mCanvasViewport.setMouseTracking(True)
         self.mCanvasViewport.setAttribute(Qt.WidgetAttribute.WA_Hover)
         self.mCanvasViewport.installEventFilter(self)
-        self.mInspectorDefaultWidth = 204
+        self.mInspectorDefaultWidth = self.INSPECTOR_DEFAULT_WIDTH
         self.initInspectorDrawer()
         self.mContentSplitter.addWidget(self.mCanvasViewport)
         self.mContentSplitter.addWidget(self.mInspector)
@@ -201,7 +204,9 @@ class MainWindow(QMainWindow):
         self.mSplitter.addWidget(self.mRightPanel)
         self.mSplitter.setCollapsible(0, True)
         self.mSplitter.setCollapsible(1, False)
-        self.mSplitter.setSizes([self.mLeftPanel.minimumWidth(), 1060])
+        self.mImageBrowserWidth = self.EXPLORER_MIN_WIDTH
+        self.mLastExplorerWidth = self.mImageBrowserWidth
+        self.mSplitter.setSizes([self.mImageBrowserWidth, 1060])
         self.mSplitter.splitterMoved.connect(self.onSplitterMoved)
 
         self.mStatusText = QLabel("Drag canvas to pan | Right-click background: pipeline info | Wheel: vertical | Shift+Wheel: horizontal | Ctrl+Wheel: zoom")
@@ -465,7 +470,7 @@ class MainWindow(QMainWindow):
         self.imageBrowser.setHeaderLabels(['name'])
         # self.imageBrowser.setColumnWidth(0, 120)
         # self.imageBrowser.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
-        self.imageBrowser.setMinimumSize(220, 0)
+        self.imageBrowser.setMinimumSize(0, 0)
         # self.imageBrowser.resize(self.mImageBrowserWidth, 0)
         self.imageBrowser.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
 
@@ -761,11 +766,22 @@ class MainWindow(QMainWindow):
             self.mExplorerToggleAction.setIcon(self.createSidebarToggleIcon(True))
         self.updateCanvasViewportSize()
 
+    def applyDefaultPanelWidths(self):
+        if self.mExplorerVisible:
+            self.mImageBrowserWidth = self.EXPLORER_MIN_WIDTH
+            self.mLastExplorerWidth = self.EXPLORER_MIN_WIDTH
+            self.mSplitter.setSizes([self.EXPLORER_MIN_WIDTH,
+                                     max(600, self.mSplitter.width() - self.EXPLORER_MIN_WIDTH)])
+        if self.mInspector.isVisible():
+            self.mContentSplitter.setSizes([max(520, self.mContentSplitter.width() - self.mInspectorDefaultWidth),
+                                            self.mInspectorDefaultWidth])
+        self.updateCanvasViewportSize()
+
     def toggleExplorer(self):
         self.mExplorerVisible = self.mExplorerToggleAction.isChecked()
         self.mExplorerToggleAction.setIcon(self.createSidebarToggleIcon(self.mExplorerVisible))
         if self.mExplorerVisible:
-            width = max(220, self.mLastExplorerWidth)
+            width = max(self.EXPLORER_MIN_WIDTH, self.mLastExplorerWidth)
             total = max(self.mSplitter.width(), width + 600)
             self.mLeftPanel.show()
             self.mSplitter.setSizes([width, max(600, total - width)])
