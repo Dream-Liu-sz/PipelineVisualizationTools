@@ -37,6 +37,8 @@ class CanvasImage(QFrame):
         self.mNodeMapPainter = dict()
         self.mRadius = 5
         self.mSelectedLink = None
+        self.mHoveredLink = None
+        self.mPendingSourcePort = None
         # self.setAttribute(Qt.WidgetAttribute.WA_Hover);
         # self.installEventFilter(self)
 
@@ -80,18 +82,23 @@ class CanvasImage(QFrame):
                 # Utils.LogD(self.TAG, input.getPortPos())
                 # Utils.LogD(self.TAG, input.getParentNodePos())
                 link_selected = self.mSelectedLink is not None and self.mSelectedLink[0] is out and self.mSelectedLink[1] is input
+                link_hovered = self.mHoveredLink is not None and self.mHoveredLink[0] is out and self.mHoveredLink[1] is input
                 for node in self.mNodeList:
                     if node.matchPort(input):
                         pen = QPen(self.mNodeMapPainter.get(node))
                         if link_selected:
                             pen.setWidth(max(4, pen.width() + 2))
+                        elif link_hovered:
+                            pen.setColor(QColor("#FFFFFF"))
+                            pen.setWidth(max(4, pen.width() + 2))
                         painter.setPen(pen)
 
-                self.drawLink(out, input, painter, link_selected)
+                self.drawLink(out, input, painter, link_selected, link_hovered)
                 pass
 
         if len(self.mNodeList) == 0:
             self.drawEmptyState(painter)
+        self.drawPendingSourcePort(painter)
 
     def drawBackground(self, painter):
         painter.fillRect(self.rect(), QColor(COLORS["bg"]))
@@ -126,7 +133,7 @@ class CanvasImage(QFrame):
         message = "Open an XML or JSON pipeline file, then double-click a pipeline in the left navigation tree to render its topology."
         painter.drawText(card.adjusted(28, 76, -28, -28), Qt.AlignLeft | Qt.TextWordWrap, message)
 
-    def drawLink(self, srcPort, dstPort, painter, selected=False):
+    def drawLink(self, srcPort, dstPort, painter, selected=False, hovered=False):
         if srcPort != None and dstPort != None and \
                 srcPort.getPortPos() != None and dstPort.getPortPos() != None:
             for node in self.mNodeList:
@@ -135,6 +142,9 @@ class CanvasImage(QFrame):
                     if pen is not None:
                         pen = QPen(pen)
                         if selected:
+                            pen.setWidth(max(4, pen.width() + 2))
+                        elif hovered:
+                            pen.setColor(QColor("#FFFFFF"))
                             pen.setWidth(max(4, pen.width() + 2))
                         BezierLineRenderer.draw_bezier_link(painter, srcPort, dstPort, pen, self.mRadius)
                         return
@@ -145,6 +155,31 @@ class CanvasImage(QFrame):
     def setSelectedLink(self, src_port, dst_port):
         self.mSelectedLink = (src_port, dst_port) if src_port is not None and dst_port is not None else None
         self.update()
+
+    def setHoveredLink(self, src_port, dst_port):
+        next_link = (src_port, dst_port) if src_port is not None and dst_port is not None else None
+        if self.mHoveredLink == next_link:
+            return
+        self.mHoveredLink = next_link
+        self.update()
+
+    def setPendingSourcePort(self, port):
+        self.mPendingSourcePort = port
+        self.update()
+
+    def drawPendingSourcePort(self, painter):
+        port = self.mPendingSourcePort
+        if port is None or port.getPortPos() is None or port.getParentNodePos() is None:
+            return
+        center = port.getPortPos() + port.getParentNodePos() + QPoint(port.getWidth(), 0)
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setPen(QPen(QColor("#FFFFFF"), 5))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(center, 13, 13)
+        painter.setPen(QPen(QColor("#202020"), 2))
+        painter.drawEllipse(center, 18, 18)
+        painter.restore()
 
     def hitTestLink(self, point):
         if self.mPortLinkDes is None:
@@ -162,6 +197,28 @@ class CanvasImage(QFrame):
                 path = BezierLineRenderer.create_bezier_path(start_point, end_point)
                 if stroker.createStroke(path).contains(QPointF(point)):
                     return src_port, dst_port
+        return None
+
+    def hitTestPort(self, point):
+        radius = 9
+        for node in self.mNodeList:
+            node_pos = node.getNodePos()
+            if node_pos is None:
+                continue
+            for port in node.getInputPort():
+                port_pos = port.getPortPos()
+                if port_pos is None:
+                    continue
+                center = node_pos + port_pos
+                if abs(point.x() - center.x()) <= radius and abs(point.y() - center.y()) <= radius:
+                    return node, port, "input"
+            for port in node.getOutputPort():
+                port_pos = port.getPortPos()
+                if port_pos is None:
+                    continue
+                center = node_pos + port_pos + QPoint(port.getWidth(), 0)
+                if abs(point.x() - center.x()) <= radius and abs(point.y() - center.y()) <= radius:
+                    return node, port, "output"
         return None
 
     def mousePressEvent(self, event):

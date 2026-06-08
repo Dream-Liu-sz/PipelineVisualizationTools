@@ -1,4 +1,4 @@
-from PyQt5.Qt import QPoint, QSize
+﻿from PyQt5.Qt import QPoint, QSize
 from PyQt5.Qt import QMessageBox
 from PyQt5.Qt import QMainWindow
 from PyQt5.QtCore import Qt, QEvent, QRect, QSettings, QTimer, pyqtSignal
@@ -7,10 +7,13 @@ from PyQt5.Qt import QIcon
 from PyQt5.Qt import QAction
 from PyQt5.QtGui import QColor, QCursor, QFont, QFontMetrics, QPalette, QPixmap, QPainter, QIcon, QPen
 from PyQt5.QtWidgets import QTreeWidget, QAbstractItemView, QHeaderView, QFrame, QTreeWidgetItem, QWidget, QFileDialog, \
-    QLabel, QSplitter, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QSizePolicy, QApplication
+    QLabel, QSplitter, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QSizePolicy, QApplication, QDialog, \
+    QFormLayout, QDialogButtonBox, QPlainTextEdit, QMenu, QSpinBox, QScrollArea
 
 from CanvasWidget import CanvasImage
+from Node import NodeDes
 from NodePainter import NodePainter
+from PipelineEditor import PipelineEditController
 from Utils import Utils
 from Utils import ComMsg
 from Utils import MsgType
@@ -19,6 +22,7 @@ from ui_theme import COLORS, app_stylesheet, font, node_color, tooltip_styleshee
 import sys
 import ctypes
 import os
+import json5
 
 import resource
 # import time
@@ -31,7 +35,11 @@ class MainWindow(QMainWindow):
     EXPLORER_MIN_WIDTH = 220
     INSPECTOR_DEFAULT_WIDTH = 294
     SNAPSHOT_BUTTON_SIZE = 54
+    FLOAT_BUTTON_GAP = 12
+    UNDO_BUTTON_SIZE = 42
+    ADD_NODE_BUTTON_SIZE = 48
     SNAPSHOT_MARGIN = 120
+    SNAPSHOT_TITLE_HEIGHT = 84
     LAST_OPEN_DIR_KEY = "fileDialog/lastOpenDir"
     DEFAULT_XML_DIR = r"D:\workspace\tools\PipelineTools"
     DEFAULT_JSON_DIR = r"Y:\workspace\code\aero_vendor_do\vendor\noth\hardware\camera\src\extened\config\aero\pipelinedescription"
@@ -83,6 +91,14 @@ class MainWindow(QMainWindow):
         self.mSettings = QSettings("PipelineVisualizationTools", "PipelineVisualizationTools")
         self.mExplorerVisible = True
         self.mLastExplorerWidth = self.mImageBrowserWidth
+        self.mLoadedPaths = []
+        self.mPipelineJsonPathMap = {}
+        self.mUseCase = None
+        self.mEditor = PipelineEditController()
+        self.mEditMode = False
+        self.mLastAddNodePos = QPoint(260, 180)
+        self.mInspectorCollapsed = True
+        self.mInspectorLastMode = "pipeline"
         self.initUI()
         QTimer.singleShot(0, self.applyDefaultPanelWidths)
 
@@ -112,7 +128,7 @@ class MainWindow(QMainWindow):
         self.initImageWindow()
         self.initLable()
         self.initTimer()
-        self.initSnapshotButton()
+        self.initFloatingControls()
         self.enableFileDropTargets()
         self.updateCanvasContext()
 
@@ -187,25 +203,13 @@ class MainWindow(QMainWindow):
         self.mMetricLinks.setObjectName("metricPill")
         self.mMetricZoom = QLabel("Zoom 100%", self.mContextBar)
         self.mMetricZoom.setObjectName("metricPill")
-        self.mFitButton = QPushButton("Center View", self.mContextBar)
-        self.mFitButton.setObjectName("toolbarButton")
-        self.mFitButton.clicked.connect(self.centerCanvas)
-        self.mResetViewButton = QPushButton("Reset View", self.mContextBar)
-        self.mResetViewButton.setObjectName("toolbarButton")
-        self.mResetViewButton.clicked.connect(self.resetPipelineView)
-
         self.mContextLayout.addWidget(titleColumn, 1)
         self.mContextLayout.addWidget(self.mMetricNodes)
         self.mContextLayout.addWidget(self.mMetricLinks)
         self.mContextLayout.addWidget(self.mMetricZoom)
-        self.mContextLayout.addWidget(self.mFitButton)
-        self.mContextLayout.addWidget(self.mResetViewButton)
         self.mRightLayout.addWidget(self.mContextBar)
 
-        self.mContentSplitter = QSplitter(Qt.Horizontal, self.mRightPanel)
-        self.mContentSplitter.setChildrenCollapsible(False)
-
-        self.mCanvasViewport = QWidget(self.mContentSplitter)
+        self.mCanvasViewport = QWidget(self.mRightPanel)
         self.mCanvasViewport.setObjectName("canvasViewport")
         self.mCanvasViewport.setMinimumSize(480, 360)
         self.mCanvasViewport.setMouseTracking(True)
@@ -213,26 +217,25 @@ class MainWindow(QMainWindow):
         self.mCanvasViewport.installEventFilter(self)
         self.mInspectorDefaultWidth = self.INSPECTOR_DEFAULT_WIDTH
         self.initInspectorDrawer()
-        self.mContentSplitter.addWidget(self.mCanvasViewport)
-        self.mContentSplitter.addWidget(self.mInspector)
-        self.mContentSplitter.setSizes([900, self.mInspectorDefaultWidth])
         self.mInspector.hide()
-        self.mRightLayout.addWidget(self.mContentSplitter, 1)
+        self.mRightLayout.addWidget(self.mCanvasViewport, 1)
 
         self.mSplitter.addWidget(self.mLeftPanel)
         self.mSplitter.addWidget(self.mRightPanel)
+        self.mSplitter.addWidget(self.mInspector)
         self.mSplitter.setCollapsible(0, True)
         self.mSplitter.setCollapsible(1, False)
+        self.mSplitter.setCollapsible(2, True)
         self.mImageBrowserWidth = self.EXPLORER_MIN_WIDTH
         self.mLastExplorerWidth = self.mImageBrowserWidth
-        self.mSplitter.setSizes([self.mImageBrowserWidth, 1060])
+        self.mSplitter.setSizes([self.mImageBrowserWidth, 1060, 0])
         self.mSplitter.splitterMoved.connect(self.onSplitterMoved)
 
         self.mStatusText = QLabel("Drop XML/JSON to open | Drag canvas to pan | Right-click background: pipeline info | Wheel: vertical | Shift+Wheel: horizontal | Ctrl+Wheel: zoom")
         self.statusBar().addPermanentWidget(self.mStatusText, 1)
 
     def initInspectorDrawer(self):
-        self.mInspector = QFrame(self.mContentSplitter)
+        self.mInspector = QFrame(self.mSplitter)
         self.mInspector.setObjectName("inspectorDrawer")
         self.mInspector.setMinimumWidth(200)
         self.mInspector.resize(self.mInspectorDefaultWidth, max(240, self.mCanvasViewport.height()))
@@ -246,11 +249,7 @@ class MainWindow(QMainWindow):
         inspectorHeaderLayout.setSpacing(8)
         self.mInspectorTitle = QLabel("Pipeline Details", inspectorHeader)
         self.mInspectorTitle.setObjectName("inspectorTitle")
-        self.mHideInspectorButton = QPushButton("Hide", inspectorHeader)
-        self.mHideInspectorButton.setObjectName("toolbarButton")
-        self.mHideInspectorButton.clicked.connect(self.hideInspector)
         inspectorHeaderLayout.addWidget(self.mInspectorTitle, 1)
-        inspectorHeaderLayout.addWidget(self.mHideInspectorButton)
         self.mInspectorSubtitle = QLabel("Click a node, link, or background", self.mInspector)
         self.mInspectorSubtitle.setObjectName("inspectorSubtitle")
         self.mInspectorBody = QTreeWidget(self.mInspector)
@@ -260,6 +259,8 @@ class MainWindow(QMainWindow):
         self.mInspectorBody.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.mInspectorBody.header().setSectionResizeMode(1, QHeaderView.Stretch)
         self.mInspectorBody.setFont(font(9, mono=True))
+        self.mInspectorEditing = False
+        self.mInspectorBody.itemChanged.connect(self.handleInspectorItemChanged)
 
         self.mInspectorLayout.addWidget(inspectorHeader)
         self.mInspectorLayout.addWidget(self.mInspectorSubtitle)
@@ -269,7 +270,7 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "mInspector"):
             return
         self.mInspector.raise_()
-        self.positionSnapshotButton()
+        self.positionFloatingControls()
 
     def initLable(self):
         self.mLabel = QLabel(self)
@@ -292,30 +293,93 @@ class MainWindow(QMainWindow):
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self.timeSlot)
 
-    def initSnapshotButton(self):
-        self.mSnapshotButton = QPushButton(self)
-        self.mSnapshotButton.setFixedSize(self.SNAPSHOT_BUTTON_SIZE, self.SNAPSHOT_BUTTON_SIZE)
-        self.mSnapshotButton.setIcon(self.createSnapshotIcon())
-        self.mSnapshotButton.setIconSize(QSize(28, 28))
-        self.mSnapshotButton.setToolTip("Save pipeline snapshot as JPEG")
-        self.mSnapshotButton.setCursor(QCursor(Qt.PointingHandCursor))
-        self.mSnapshotButton.clicked.connect(self.snapshotPipeline)
-        self.mSnapshotButton.setStyleSheet("""
+    def floatingButtonStyle(self, size, active=False):
+        bg = "#F2F2F2"
+        fg = "#202020"
+        border = "#38BDF8" if active else "#FFFFFF"
+        hover = "#FFFFFF"
+        return """
             QPushButton {
-                background: #F2F2F2;
-                border: 1px solid #FFFFFF;
-                border-radius: 27px;
+                background: %s;
+                color: %s;
+                border: 1px solid %s;
+                border-radius: %dpx;
+                font-weight: 700;
             }
             QPushButton:hover {
-                background: #FFFFFF;
+                background: %s;
                 border-color: #D8D8D8;
             }
             QPushButton:pressed {
                 background: #DADADA;
             }
-        """)
-        self.positionSnapshotButton()
-        self.mSnapshotButton.raise_()
+            QPushButton:disabled {
+                background: #DADADA;
+                color: #202020;
+                border-color: #9A9A9A;
+            }
+        """ % (bg, fg, border, size // 2, hover)
+
+    def configureFloatingButton(self, button, size, tooltip, text=None, icon=None):
+        button.setFixedSize(size, size)
+        if text is not None:
+            button.setText(text)
+        if icon is not None:
+            button.setText("")
+            button.setIcon(icon)
+            button.setIconSize(QSize(28, 28))
+        button.setToolTip(tooltip)
+        button.setCursor(QCursor(Qt.PointingHandCursor))
+        button.setStyleSheet(self.floatingButtonStyle(size))
+        button.raise_()
+
+    def initFloatingControls(self):
+        self.mEditFloatingButton = QPushButton(self)
+        self.configureFloatingButton(self.mEditFloatingButton, self.SNAPSHOT_BUTTON_SIZE,
+                                     "Enter or leave JSON edit mode", icon=self.createEditIcon())
+        self.mEditFloatingButton.clicked.connect(self.toggleEditMode)
+
+        self.mSaveFloatingButton = QPushButton(self)
+        self.configureFloatingButton(self.mSaveFloatingButton, self.SNAPSHOT_BUTTON_SIZE,
+                                     "Save edited JSON", icon=self.createSaveIcon())
+        self.mSaveFloatingButton.clicked.connect(self.saveEditedJson)
+        self.mSaveFloatingButton.hide()
+
+        self.mFitButton = QPushButton(self)
+        self.configureFloatingButton(self.mFitButton, self.SNAPSHOT_BUTTON_SIZE,
+                                     "Center pipeline view", icon=self.createCenterIcon())
+        self.mFitButton.clicked.connect(self.centerCanvas)
+
+        self.mResetViewButton = QPushButton(self)
+        self.configureFloatingButton(self.mResetViewButton, self.SNAPSHOT_BUTTON_SIZE,
+                                     "Reset pipeline view", icon=self.createResetIcon())
+        self.mResetViewButton.clicked.connect(self.resetPipelineView)
+
+        self.mSnapshotButton = QPushButton(self)
+        self.configureFloatingButton(self.mSnapshotButton, self.SNAPSHOT_BUTTON_SIZE,
+                                     "Save pipeline snapshot as JPEG", icon=self.createSnapshotIcon())
+        self.mSnapshotButton.clicked.connect(self.snapshotPipeline)
+
+        self.mAddNodeButton = QPushButton(self)
+        self.configureFloatingButton(self.mAddNodeButton, self.ADD_NODE_BUTTON_SIZE,
+                                     "Add node from template", icon=self.createPlusIcon())
+        self.mAddNodeButton.clicked.connect(self.addNodeFromFloatingButton)
+        self.mAddNodeButton.hide()
+
+        self.mUndoFloatingButton = QPushButton(self)
+        self.configureFloatingButton(self.mUndoFloatingButton, self.UNDO_BUTTON_SIZE,
+                                     "Undo edit", icon=self.createUndoIcon(False))
+        self.mUndoFloatingButton.clicked.connect(self.undoEdit)
+        self.mUndoFloatingButton.hide()
+
+        self.mRedoFloatingButton = QPushButton(self)
+        self.configureFloatingButton(self.mRedoFloatingButton, self.UNDO_BUTTON_SIZE,
+                                     "Redo edit", icon=self.createUndoIcon(True))
+        self.mRedoFloatingButton.clicked.connect(self.redoEdit)
+        self.mRedoFloatingButton.hide()
+
+        self.positionFloatingControls()
+        self.updateEditControls()
 
     def createSnapshotIcon(self):
         pixmap = QPixmap(28, 28)
@@ -337,7 +401,84 @@ class MainWindow(QMainWindow):
         painter.end()
         return QIcon(pixmap)
 
+    def createLineIcon(self, draw_fn):
+        pixmap = QPixmap(28, 28)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setPen(QPen(QColor("#202020"), 2.4))
+        painter.setBrush(Qt.NoBrush)
+        draw_fn(painter)
+        painter.end()
+        return QIcon(pixmap)
+
+    def createEditIcon(self):
+        def draw(painter):
+            painter.drawLine(8, 20, 20, 8)
+            painter.drawLine(17, 5, 23, 11)
+            painter.drawLine(6, 22, 11, 20)
+            painter.drawLine(6, 22, 8, 17)
+        return self.createLineIcon(draw)
+
+    def createSaveIcon(self):
+        def draw(painter):
+            painter.drawRoundedRect(6, 5, 16, 18, 2, 2)
+            painter.drawLine(10, 5, 10, 11)
+            painter.drawLine(10, 11, 18, 11)
+            painter.drawRect(10, 16, 8, 6)
+        return self.createLineIcon(draw)
+
+    def createCenterIcon(self):
+        def draw(painter):
+            painter.drawEllipse(7, 7, 14, 14)
+            painter.drawLine(14, 3, 14, 9)
+            painter.drawLine(14, 19, 14, 25)
+            painter.drawLine(3, 14, 9, 14)
+            painter.drawLine(19, 14, 25, 14)
+        return self.createLineIcon(draw)
+
+    def createResetIcon(self):
+        def draw(painter):
+            painter.drawArc(6, 6, 16, 16, 35 * 16, 285 * 16)
+            painter.drawLine(8, 7, 8, 13)
+            painter.drawLine(8, 7, 14, 7)
+        return self.createLineIcon(draw)
+
+    def createPlusIcon(self):
+        def draw(painter):
+            painter.drawLine(14, 7, 14, 21)
+            painter.drawLine(7, 14, 21, 14)
+        return self.createLineIcon(draw)
+
+    def createUndoIcon(self, redo=False):
+        def draw(painter):
+            if redo:
+                painter.drawArc(6, 7, 16, 14, 210 * 16, 260 * 16)
+                painter.drawLine(19, 8, 23, 8)
+                painter.drawLine(23, 8, 23, 12)
+            else:
+                painter.drawArc(6, 7, 16, 14, -110 * 16, 260 * 16)
+                painter.drawLine(9, 8, 5, 8)
+                painter.drawLine(5, 8, 5, 12)
+        return self.createLineIcon(draw)
+
+    def createNodeTemplateIcon(self, blank=False):
+        def draw(painter):
+            if blank:
+                painter.setPen(QPen(QColor("#202020"), 2.4))
+                painter.drawRoundedRect(7, 7, 14, 14, 3, 3)
+                painter.drawLine(14, 10, 14, 18)
+                painter.drawLine(10, 14, 18, 14)
+                return
+            painter.drawRoundedRect(6, 8, 16, 12, 3, 3)
+            painter.drawEllipse(4, 12, 4, 4)
+            painter.drawEllipse(20, 12, 4, 4)
+        return self.createLineIcon(draw)
+
     def positionSnapshotButton(self):
+        self.positionFloatingControls()
+
+    def positionFloatingControls(self):
         if not hasattr(self, "mSnapshotButton"):
             return
         offset = 0
@@ -345,10 +486,31 @@ class MainWindow(QMainWindow):
             offset = self.mInspector.width() + 12
         status_height = self.statusBar().height() if self.statusBar() is not None else 0
         size = self.SNAPSHOT_BUTTON_SIZE
-        x = max(16, self.width() - offset - size - 22)
+        bottom_buttons = [self.mEditFloatingButton]
+        if self.mEditMode and self.mEditor.enabled:
+            bottom_buttons.append(self.mSaveFloatingButton)
+        bottom_buttons.extend([self.mFitButton, self.mResetViewButton, self.mSnapshotButton])
+        total_width = len(bottom_buttons) * size + (len(bottom_buttons) - 1) * self.FLOAT_BUTTON_GAP
+        x = max(16, self.width() - offset - total_width - 22)
         y = max(16, self.height() - status_height - size - 18)
-        self.mSnapshotButton.move(x, y)
-        self.mSnapshotButton.raise_()
+        for index, button in enumerate(bottom_buttons):
+            button.move(x + index * (size + self.FLOAT_BUTTON_GAP), y)
+            button.raise_()
+
+        if hasattr(self, "mAddNodeButton"):
+            add_size = self.ADD_NODE_BUTTON_SIZE
+            add_pos = self.mCanvasViewport.mapTo(self, QPoint(18, max(0, self.mCanvasViewport.height() // 2 - add_size // 2)))
+            add_x = add_pos.x()
+            add_y = add_pos.y()
+            self.mAddNodeButton.move(add_x, add_y)
+            self.mAddNodeButton.raise_()
+
+        if hasattr(self, "mUndoFloatingButton"):
+            top_left = self.mCanvasViewport.mapTo(self, QPoint(18, 18))
+            self.mUndoFloatingButton.move(top_left)
+            self.mRedoFloatingButton.move(top_left + QPoint(self.UNDO_BUTTON_SIZE + 8, 0))
+            self.mUndoFloatingButton.raise_()
+            self.mRedoFloatingButton.raise_()
 
     def initMenu(self):
         Utils.LogD(self.TAG, "initMenu+")
@@ -371,6 +533,16 @@ class MainWindow(QMainWindow):
         self.mExplorerToggleAction.setToolTip("Show or hide pipeline explorer")
         self.mExplorerToggleAction.triggered.connect(self.toggleExplorer)
         menubar.addAction(self.mExplorerToggleAction)
+        self.mInspectorToggleButton = QPushButton(menubar)
+        self.mInspectorToggleButton.setObjectName("menuIconButton")
+        self.mInspectorToggleButton.setCheckable(True)
+        self.mInspectorToggleButton.setChecked(False)
+        self.mInspectorToggleButton.setIcon(self.createSidebarToggleIcon(False))
+        self.mInspectorToggleButton.setIconSize(QSize(18, 18))
+        self.mInspectorToggleButton.setFixedSize(32, 28)
+        self.mInspectorToggleButton.setToolTip("Show or hide details panel")
+        self.mInspectorToggleButton.clicked.connect(self.toggleInspectorFromAction)
+        menubar.setCornerWidget(self.mInspectorToggleButton, Qt.TopRightCorner)
 
         fileMenu = menubar.addMenu('File')
         fileMenu.addAction(openImageFolderAct)
@@ -396,7 +568,7 @@ class MainWindow(QMainWindow):
         pixmap.fill(Qt.transparent)
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.Antialiasing, True)
-        stroke = QColor("#B8B8B8" if checked else "#8A8A8A")
+        stroke = QColor("#F2F2F2" if checked else "#B8B8B8")
         fill = QColor(255, 255, 255, 0)
         painter.setPen(QPen(stroke, 1.4))
         painter.setBrush(fill)
@@ -407,8 +579,8 @@ class MainWindow(QMainWindow):
 
     def triggerOpenFile(self, q):
         # directory1 = QFileDialog.getExistingDirectory(self,
-        #                                               "选取文件夹",
-        #                                               "./")  # 起始路径
+        #                                               "閫夊彇鏂囦欢澶?,
+        #                                               "./")  # 璧峰璺緞
         # rootdir = r"C:\Users\lx\Documents"
         rootdir = self.getLastOpenDir(self.DEFAULT_XML_DIR)
         fileName, self.mFiletype = QFileDialog.getOpenFileName(self,
@@ -417,26 +589,26 @@ class MainWindow(QMainWindow):
                                                           "Xml Files (*.xml);;All Files (*)")
 
         # files, ok1 = QFileDialog.getOpenFileNames(self,
-        #                                           "多文件选择",
+        #                                           "澶氭枃浠堕€夋嫨",
         #                                           "./",
         #                                           "All Files (*);;Text Files (*.txt)")
         #
         # fileName2, ok2 = QFileDialog.getSaveFileName(self,
-        #                                              "文件保存",
+        #                                              "鏂囦欢淇濆瓨",
         #                                              "./",
         #                                              "All Files (*);;Text Files (*.txt)")
         self.loadPipelineFiles(fileName)
 
     def triggerOpenFiles(self, q):
         # directory1 = QFileDialog.getExistingDirectory(self,
-        #                                               "选取文件夹",
-        #                                               "./")  # 起始路径
+        #                                               "閫夊彇鏂囦欢澶?,
+        #                                               "./")  # 璧峰璺緞
         # rootdir = r"C:\Users\lx\Documents"
         rootdir = self.getLastOpenDir(self.DEFAULT_JSON_DIR)
-        # folder_path = QFileDialog.getExistingDirectory(self, "选择文件夹", rootdir)
+        # folder_path = QFileDialog.getExistingDirectory(self, "閫夋嫨鏂囦欢澶?, rootdir)
 
         # self.mFileName, self.mFiletype = QFileDialog.getOpenFileName(self,
-        #                                                   "选取文件",
+        #                                                   "閫夊彇鏂囦欢",
         #                                                   rootdir,
         #                                                   "Xml Files (*.xml);;All Files (*)")
 
@@ -446,7 +618,7 @@ class MainWindow(QMainWindow):
                                                                       "Json Files (*.json);;All Files (*)")
         #
         # fileName2, ok2 = QFileDialog.getSaveFileName(self,
-        #                                              "文件保存",
+        #                                              "鏂囦欢淇濆瓨",
         #                                              "./",
         #                                              "All Files (*);;Text Files (*.txt)")
         self.loadPipelineFiles(fileNames)
@@ -478,10 +650,13 @@ class MainWindow(QMainWindow):
         paths = [path for path in paths if path]
         if len(paths) == 0:
             return False
+        self.mPipelineJsonPathMap = {}
 
         xmlFiles = [path for path in paths if path.lower().endswith(".xml")]
         jsonFiles = [path for path in paths if path.lower().endswith(".json")]
         if len(xmlFiles) == 1 and len(jsonFiles) == 0 and len(paths) == 1:
+            self.disableEditMode()
+            self.mLoadedPaths = list(paths)
             self.imageBrowser.clear()
             self.clearLoadedPipeline()
             self.mFileName = xmlFiles[0]
@@ -491,12 +666,15 @@ class MainWindow(QMainWindow):
             self.initUseCase()
             return True
         if len(jsonFiles) > 0 and len(xmlFiles) == 0 and len(jsonFiles) == len(paths):
+            self.disableEditMode()
+            self.mLoadedPaths = list(jsonFiles)
             self.imageBrowser.clear()
             self.clearLoadedPipeline()
             self.mFileName = jsonFiles
             print(self.mFileName)
             self.mCurrentFileSummary = "%d JSON files loaded" % len(self.mFileName)
             self.mJsonOpend = True
+            self.indexJsonPipelinePaths(jsonFiles)
             self.rememberOpenPath(self.mFileName)
             self.initAllJsonPipeline()
             return True
@@ -535,6 +713,18 @@ class MainWindow(QMainWindow):
         else:
             event.ignore()
 
+    def indexJsonPipelinePaths(self, jsonFiles):
+        self.mPipelineJsonPathMap = {}
+        for path in jsonFiles:
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    doc = json5.load(fh)
+                pipeline_name = str(doc.get("PipelineName", ""))
+                if pipeline_name:
+                    self.mPipelineJsonPathMap[pipeline_name] = path
+            except Exception:
+                continue
+
     def clearLoadedPipeline(self):
         self.clearWork()
         self.mSelectPipeline = None
@@ -549,23 +739,24 @@ class MainWindow(QMainWindow):
             self.mCanvas.initPainterInstance([])
             self.mCanvas.setPortLinkDes({})
             self.mCanvas.setSelectedLink(None, None)
+            self.mCanvas.setPendingSourcePort(None)
             self.mCanvas.update()
 
     def processHelp(self):
-        version = "V3.0"
-        update = "2026.5.20"
+        version = "V3.1"
+        update = "2026.06.01"
         aboutInfo = "\n".join([
-            "版本信息：%s" % version,
-            "版权所有：Jianlin",
-            "问题反馈：a185531353@qq.com",
-            "最后更新时间：%s" % update,
+            "Version: %s" % version,
+            "Owner: Jianlin",
+            "Feedback: a185531353@qq.com",
+            "Updated: %s" % update,
         ])
         self.showStyledMessage("About", aboutInfo)
 
     def showTips(self):
         self.showStyledMessage("Tips",
-                               "如果遇到导入文件后没有反应\n"
-                               "需要导入编译生成的 XML，例如：g_xxx_usecase.xml")
+                               "If opening a file shows no result, use the compiled XML file, such as g_xxx_usecase.xml.")
+
 
     def showStyledMessage(self, title, message):
         box = QMessageBox(self)
@@ -601,41 +792,41 @@ class MainWindow(QMainWindow):
     def initUseCase(self):
         Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
         Utils.LogI(self.TAG, ("Select file is " + self.mFileName))
-        # 创建跟节点
+        # 鍒涘缓璺熻妭鐐?
         self.mUseCase = UseCaseDes(str(self.mFileName), "")
         self.mUseCase.useCaseTranslation()
         self.updateTreeWidget()
         self.updateCanvasContext()
         # self.root1 = QTreeWidgetItem(self.imageBrowser)
         # self.root1.setText(0, '2UseCase')
-        # 默认展开
+        # 榛樿灞曞紑
         # self.imageBrowser.expandAll()
         Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
 
     def initAllJsonPipeline(self):
         Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
 
-        # 创建跟节点
+        # 鍒涘缓璺熻妭鐐?
         self.mUseCase = UseCaseDes(self.mFileName, "NCFJsonUses")
         self.mUseCase.useCaseTranslationJson()
         self.updateTreeWidget()
         self.updateCanvasContext()
         # self.root1 = QTreeWidgetItem(self.imageBrowser)
         # self.root1.setText(0, '2UseCase')
-        # 默认展开
+        # 榛樿灞曞紑
         # self.imageBrowser.expandAll()
         Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
 
     def initBrowser(self):
         '''
-            @Func:左侧树形选择栏
+            @Func:宸︿晶鏍戝舰閫夋嫨鏍?
         '''
         Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
         # self.imageBrowser = QListWidget(self)
         self.mImageBrowserPos = QPoint(0, 26)
         self.imageBrowser = QTreeWidget(self.mLeftPanel)
         # self.mImageBrowserWidth = 400
-        # tree.setFixedSize(self.width(), self.height())  # 设置控件尺寸
+        # tree.setFixedSize(self.width(), self.height())  # 璁剧疆鎺т欢灏哄
         self.imageBrowser.setColumnCount(1)
         self.imageBrowser.setHeaderLabels(['name'])
         # self.imageBrowser.setColumnWidth(0, 120)
@@ -652,8 +843,8 @@ class MainWindow(QMainWindow):
         self.imageBrowser.raise_()
         # self.setCentralWidget(self.imageBrowser)
         # self.centralWidget().setMouseTracking(True)
-        # root1.setIcon(0, QIcon('文件夹.png'))
-        # self.child1.setIcon(0, QIcon('文件.png'))
+        # root1.setIcon(0, QIcon('鏂囦欢澶?png'))
+        # self.child1.setIcon(0, QIcon('鏂囦欢.png'))
         self.imageBrowser.setFrameShape(QFrame.NoFrame)
         self.imageBrowser.setFrameShadow(QFrame.Plain)
         self.imageBrowser.doubleClicked.connect(self.onClicked)
@@ -665,17 +856,512 @@ class MainWindow(QMainWindow):
         item = self.imageBrowser.currentItem()
         self.mFontSize = 24
         if item.parent() != None and item.parent().text(0) != "UseCase":
+            if self.mEditMode and self.mCurrentPipelineName and item.text(0) != self.mCurrentPipelineName:
+                self.showStyledMessage("Edit mode", "Finish or leave edit mode before switching to another pipeline.")
+                return
             # QMessageBox.information(self, 'Tips', 'Select useCase %s pipeline is %s' % (item.parent().text(0), item.text(0)))
             self.mCurrentPipelineName = item.text(0)
             self.mSelectPipeline = self.mUseCase.buildPipeline(item.parent().text(0), item.text(0), self.mCanvasCenterPos, self.mFontSize, self)
             self.mSelectPipeline.print()
             self.clearWork()
             self.initCanvas()
+            self.attachEditorForCurrentPipeline()
             self.updateCanvasContext()
+
+    def attachEditorForCurrentPipeline(self):
+        json_path = self.mPipelineJsonPathMap.get(self.mCurrentPipelineName)
+        if self.mJsonOpend and json_path is not None and self.mSelectPipeline is not None:
+            self.mEditor.attach(self.mSelectPipeline, json_path)
+        else:
+            self.mEditor.detach()
+            self.mEditMode = False
+        if hasattr(self, "mCanvas"):
+            self.mCanvas.setPendingSourcePort(None)
+        self.updateEditControls()
+
+    def disableEditMode(self):
+        self.mEditMode = False
+        if hasattr(self, "mEditor"):
+            self.mEditor.detach()
+        if hasattr(self, "mCanvas"):
+            self.mCanvas.setPendingSourcePort(None)
+        self.updateEditControls()
+
+    def toggleEditMode(self):
+        if not self.mEditor.enabled:
+            self.mEditMode = False
+            self.showStyledMessage("Edit mode", self.editModeUnavailableReason())
+        else:
+            self.mEditMode = not self.mEditMode
+            self.mEditor.set_tool(PipelineEditController.TOOL_SELECT)
+            if not self.mEditMode:
+                self.mEditor.pending_src_port = None
+                if hasattr(self, "mCanvas"):
+                    self.mCanvas.setPendingSourcePort(None)
+            elif self.mInspectorCollapsed and self.mSelectPipeline is not None:
+                self.mInspectorCollapsed = False
+                self.showPipelineDetails()
+        self.updateEditControls()
+
+    def setEditTool(self, tool):
+        return
+
+    def editModeUnavailableReason(self):
+        if not self.mJsonOpend:
+            return "Please open JSON and double-click one pipeline to render it. XML is read-only."
+        if self.mSelectPipeline is None:
+            return "Double-click a pipeline in the left panel before entering edit mode."
+        if self.mPipelineJsonPathMap.get(self.mCurrentPipelineName) is None:
+            return "This pipeline has no matching source JSON path."
+        return "This pipeline cannot enter edit mode."
+
+    def updateEditControls(self):
+        if not hasattr(self, "mEditFloatingButton"):
+            return
+        editable = self.mEditor.enabled
+        active = editable and self.mEditMode
+        self.mEditFloatingButton.setStyleSheet(self.floatingButtonStyle(self.SNAPSHOT_BUTTON_SIZE, active))
+        self.mEditFloatingButton.setToolTip("Leave edit mode" if active else "Enter JSON edit mode")
+        self.mSaveFloatingButton.setVisible(active)
+        self.mSaveFloatingButton.setEnabled(active and self.mEditor.dirty)
+        self.mAddNodeButton.setVisible(active)
+        self.mUndoFloatingButton.setVisible(active)
+        self.mRedoFloatingButton.setVisible(active)
+        self.mUndoFloatingButton.setEnabled(active and self.mEditor.can_undo())
+        self.mRedoFloatingButton.setEnabled(active and self.mEditor.can_redo())
+        if hasattr(self, "mInspectorToggleButton"):
+            visible = not self.mInspectorCollapsed
+            self.mInspectorToggleButton.blockSignals(True)
+            self.mInspectorToggleButton.setChecked(visible)
+            self.mInspectorToggleButton.setIcon(self.createSidebarToggleIcon(visible))
+            self.mInspectorToggleButton.blockSignals(False)
+
+        if not editable:
+            msg = "JSON edit mode is unavailable"
+        elif self.mEditMode:
+            dirty = "modified" if self.mEditor.dirty else "clean"
+            msg = "Editing %s | click output port, then input port to link | %s" % (
+                os.path.basename(self.mEditor.json_path), dirty)
+        else:
+            msg = "Single JSON pipeline ready for edit mode"
+        if self.mStatusText is not None:
+            self.mStatusText.setText(msg)
+        self.positionFloatingControls()
+
+    def refreshEditedCanvas(self):
+        if self.mSelectPipeline is None:
+            return
+        old_zoom = self.mZoomScale
+        old_canvas_pos = QPoint(self.mCanvas.pos()) if hasattr(self, "mCanvas") else None
+        self.mEditor.pending_src_port = None
+        pipeline_key = id(self.mSelectPipeline)
+        self.mPipelineBaseLayoutMap.pop(pipeline_key, None)
+        self.mPipelineCurrentLayoutMap.pop(pipeline_key, None)
+        self.clearWork()
+        self.initCanvas()
+        self.mZoomScale = old_zoom
+        self.refreshZoomedLayout()
+        if old_canvas_pos is not None:
+            self.mCanvas.move(old_canvas_pos)
+        self.updateCanvasContext()
+        self.updateEditControls()
+
+    def restorePipelineBaseGeometry(self):
+        if self.mSelectPipeline is None:
+            return
+        for node, base in list(self.mBaseLayout.items()):
+            if node is None:
+                continue
+            node.setNodePos(QPoint(base["pos"]))
+            node.setNodeSize(QSize(base["size"]))
+            node.setNodeFont(base["font"])
+            node.calPortPos()
+
+    def undoEdit(self):
+        label = self.mEditor.undo()
+        if label is not None:
+            self.refreshEditedCanvas()
+            self.statusBar().showMessage("Undo: %s" % label, 3000)
+
+    def redoEdit(self):
+        label = self.mEditor.redo()
+        if label is not None:
+            self.refreshEditedCanvas()
+            self.statusBar().showMessage("Redo: %s" % label, 3000)
+
+    def relayoutEditedPipeline(self):
+        if not self.mEditor.enabled:
+            return
+        self.mEditor.relayout(self.mCanvasCenterPos, self.mFontSize)
+        self.refreshEditedCanvas()
+        self.statusBar().showMessage("Pipeline re-layout complete", 3000)
+
+    def saveEditedJson(self):
+        if not self.mEditor.enabled:
+            self.showStyledMessage("Save JSON", "No editable JSON pipeline is selected.")
+            return
+        ok, message = self.mEditor.save_json()
+        if not ok:
+            self.showStyledMessage("Cannot save JSON", message)
+            return
+        self.updateEditControls()
+        self.statusBar().showMessage("Saved JSON: %s" % message, 5000)
+
+    def parsePortText(self, text):
+        ports = []
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            if "," in line:
+                name, port_id = line.split(",", 1)
+            elif ":" in line:
+                name, port_id = line.split(":", 1)
+            else:
+                name, port_id = "port_%s" % line, line
+            ports.append((name.strip(), port_id.strip()))
+        return ports
+
+    def portText(self, ports):
+        return "\n".join("%s,%s" % (port.getPortName(), port.getPortId()) for port in ports)
+
+    def generatedPortText(self, count, prefix):
+        return "\n".join("%s_%d,%d" % (prefix, index, index) for index in range(max(0, count)))
+
+    def normalizedPortCount(self, value, fallback):
+        try:
+            return max(0, int(str(value).strip()))
+        except ValueError:
+            return fallback
+
+    def editNodeFieldsDialog(self, node, title):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.setMinimumWidth(416 if title == "Add Node From Template" else 520)
+        dialog.setStyleSheet("""
+            QDialog {
+                background: #111111;
+                color: #F2F2F2;
+                font-family: "Microsoft YaHei UI";
+            }
+            QLabel {
+                color: #D6D6D6;
+                background: transparent;
+            }
+            QLineEdit, QPlainTextEdit, QSpinBox {
+                color: #F2F2F2;
+                background: #202020;
+                border: 1px solid #3A3A3A;
+                border-radius: 8px;
+                padding: 7px 9px;
+                selection-background-color: #5A5A5A;
+            }
+            QLineEdit:focus, QPlainTextEdit:focus, QSpinBox:focus {
+                border-color: #7A7A7A;
+                background: #242424;
+            }
+            QPushButton {
+                color: #E8E8E8;
+                background: #242424;
+                border: 1px solid #3A3A3A;
+                border-radius: 8px;
+                padding: 7px 16px;
+                min-width: 72px;
+            }
+            QPushButton:hover {
+                background: #2D2D2D;
+                border-color: #7A7A7A;
+            }
+        """)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(12)
+        form = QFormLayout()
+        form.setSpacing(10)
+        nameEdit = QLineEdit(str(node.getNodeName()), dialog)
+        idEdit = QLineEdit(str(node.getNodeId()), dialog)
+        instanceEdit = QLineEdit(str(node.getNodeInstance()), dialog)
+        instanceIdEdit = QLineEdit(str(node.getNodeInstanceId()), dialog)
+        add_mode = title == "Add Node From Template"
+        input_count = 0 if add_mode else len(node.getInputPort())
+        output_count = 0 if add_mode else len(node.getOutputPort())
+        inputCountEdit = QSpinBox(dialog)
+        outputCountEdit = QSpinBox(dialog)
+        for spin in (inputCountEdit, outputCountEdit):
+            spin.setRange(0, 256)
+        inputCountEdit.setValue(input_count)
+        outputCountEdit.setValue(output_count)
+        inputEdit = QPlainTextEdit(self.generatedPortText(input_count, "input") if add_mode else self.portText(node.getInputPort()), dialog)
+        outputEdit = QPlainTextEdit(self.generatedPortText(output_count, "output") if add_mode else self.portText(node.getOutputPort()), dialog)
+        inputEdit.setPlaceholderText("One input port per line: PortName,PortId")
+        outputEdit.setPlaceholderText("One output port per line: PortName,PortId")
+        inputEdit.setMinimumHeight(90)
+        outputEdit.setMinimumHeight(90)
+        inputCountEdit.valueChanged.connect(lambda value: inputEdit.setPlainText(self.generatedPortText(value, "input")))
+        outputCountEdit.valueChanged.connect(lambda value: outputEdit.setPlainText(self.generatedPortText(value, "output")))
+        form.addRow("NodeName", nameEdit)
+        form.addRow("NodeId", idEdit)
+        form.addRow("NodeInstance", instanceEdit)
+        form.addRow("NodeInstanceId", instanceIdEdit)
+        form.addRow("Input port count", inputCountEdit)
+        form.addRow("Input ports", inputEdit)
+        form.addRow("Output port count", outputCountEdit)
+        form.addRow("Output ports", outputEdit)
+        layout.addLayout(form)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        if dialog.exec_() != QDialog.Accepted:
+            return None
+        return {
+            "NodeName": nameEdit.text().strip(),
+            "NodeId": idEdit.text().strip(),
+            "NodeInstance": instanceEdit.text().strip(),
+            "NodeInstanceId": instanceIdEdit.text().strip(),
+            "InputPorts": self.parsePortText(inputEdit.toPlainText()),
+            "OutputPorts": self.parsePortText(outputEdit.toPlainText())
+        }
+
+    def addNodeFromTemplate(self, canvas_pos):
+        if not self.mEditor.enabled or self.mSelectPipeline is None:
+            return
+        template = self.chooseNodeTemplate()
+        if template is None:
+            return
+        fields = self.editNodeFieldsDialog(template, "Add Node From Template")
+        if fields is None:
+            return
+        new_key = (fields["NodeName"], fields["NodeId"], fields["NodeInstanceId"])
+        for node in self.mSelectPipeline.getNodeList():
+            if self.mEditor.node_identity(node) == new_key:
+                self.showStyledMessage("Add Node", "A node with this NodeName, NodeId, and NodeInstanceId already exists.")
+                return
+        self.restorePipelineBaseGeometry()
+        new_node = self.mEditor.duplicate_node(template, fields, canvas_pos)
+        self.refreshEditedCanvas()
+        self.showNodeDetails(new_node)
+
+    def collectNodeTemplates(self):
+        templates = {}
+        if self.mUseCase is None:
+            return []
+        for use_case, pipelines in self.mUseCase.getPipelineMap().items():
+            for pipeline in pipelines:
+                pipeline_name = pipeline.getPipelineName()
+                for node in pipeline.getNodeList():
+                    key = (str(node.getNodeName()), str(node.getNodeId()), str(node.getNodeInstanceId()))
+                    if key not in templates:
+                        templates[key] = {
+                            "node": node,
+                            "source": "%s / %s" % (use_case, pipeline_name)
+                        }
+        return sorted(templates.values(), key=lambda item: (
+            str(item["node"].getNodeName()),
+            str(item["node"].getNodeId()),
+            str(item["node"].getNodeInstanceId())))
+
+    def blankNodeTemplate(self):
+        node = NodeDes("NewNode", "0", "0", "0")
+        node.setNodeFont(self.mFontSize)
+        node.calNodeSize()
+        node.calPortPos()
+        return node
+
+    def chooseNodeTemplate(self):
+        dialog = QDialog(self, Qt.Popup | Qt.FramelessWindowHint)
+        dialog.setObjectName("nodeTemplatePopup")
+        dialog.setStyleSheet("""
+            QDialog#nodeTemplatePopup {
+                background: #181818;
+                border: 1px solid #3A3A3A;
+                border-radius: 10px;
+            }
+            QLabel#templatePopupTitle {
+                color: #F2F2F2;
+                font-weight: 700;
+                padding: 2px 2px 6px 2px;
+            }
+            QScrollArea#nodeTemplateScroll {
+                background: #181818;
+                border: 0;
+            }
+            QWidget#nodeTemplateList {
+                background: #181818;
+            }
+            QPushButton#nodeTemplateItem {
+                color: #F2F2F2;
+                background: #202020;
+                border: 1px solid #303030;
+                border-radius: 7px;
+                padding: 9px 12px;
+                text-align: left;
+                min-height: 22px;
+            }
+            QPushButton#nodeTemplateItem:hover {
+                background: #2D2D2D;
+                border-color: #5A5A5A;
+            }
+        """)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+        title = QLabel("Add Node", dialog)
+        title.setObjectName("templatePopupTitle")
+        layout.addWidget(title)
+
+        scroll = QScrollArea(dialog)
+        scroll.setObjectName("nodeTemplateScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        list_widget = QWidget(scroll)
+        list_widget.setObjectName("nodeTemplateList")
+        list_layout = QVBoxLayout(list_widget)
+        list_layout.setContentsMargins(0, 0, 0, 0)
+        list_layout.setSpacing(6)
+
+        selected = {"template": None}
+
+        def add_template_button(label, template, tooltip=""):
+            button = QPushButton(label, list_widget)
+            button.setObjectName("nodeTemplateItem")
+            button.setIcon(self.createNodeTemplateIcon(template is None))
+            button.setIconSize(QSize(18, 18))
+            if tooltip:
+                button.setToolTip(tooltip)
+            button.clicked.connect(lambda checked=False, value=template: self.acceptNodeTemplate(dialog, selected, value))
+            list_layout.addWidget(button)
+
+        add_template_button("Blank node", None)
+        for template in self.collectNodeTemplates():
+            node = template["node"]
+            label = "%s  #%s / inst %s" % (node.getNodeName(), node.getNodeId(), node.getNodeInstanceId())
+            add_template_button(label, node, "Source: %s" % template["source"])
+
+        list_layout.addStretch(1)
+        scroll.setWidget(list_widget)
+        row_count = len(self.collectNodeTemplates()) + 1
+        max_height = max(220, min(520, self.mCanvasViewport.height() - 80, row_count * 43 + 16))
+        scroll.setFixedHeight(max_height)
+        dialog.setFixedWidth(272)
+        layout.addWidget(scroll)
+
+        dialog.adjustSize()
+        button_center = self.mAddNodeButton.mapToGlobal(
+            QPoint(self.mAddNodeButton.width() + 8, self.mAddNodeButton.height() // 2))
+        screen_rect = QApplication.desktop().availableGeometry(self)
+        popup_x = button_center.x()
+        popup_y = button_center.y() - dialog.height() // 2
+        popup_y = max(screen_rect.top() + 8, min(popup_y, screen_rect.bottom() - dialog.height() - 8))
+        popup_x = max(screen_rect.left() + 8, min(popup_x, screen_rect.right() - dialog.width() - 8))
+        dialog.move(QPoint(popup_x, popup_y))
+        if dialog.exec_() != QDialog.Accepted:
+            return None
+        if selected["template"] is None:
+            return self.blankNodeTemplate()
+        return selected["template"]
+
+    def acceptNodeTemplate(self, dialog, selected, template):
+        selected["template"] = template
+        dialog.accept()
+
+    def addNodeFromFloatingButton(self):
+        if not self.mEditMode or not self.mEditor.enabled:
+            return
+        viewport_pos = QPoint(180, max(80, self.mCanvasViewport.height() // 2))
+        canvas_pos = viewport_pos - self.mCanvas.pos()
+        if self.mZoomScale > 0:
+            canvas_pos = QPoint(int(canvas_pos.x() / self.mZoomScale), int(canvas_pos.y() / self.mZoomScale))
+        self.mLastAddNodePos = QPoint(canvas_pos)
+        self.addNodeFromTemplate(canvas_pos)
+
+    def editSelectedNode(self, node):
+        if not self.mEditor.enabled or node is None:
+            return
+        fields = self.editNodeFieldsDialog(node, "Edit Node")
+        if fields is None:
+            return
+        new_key = (fields["NodeName"], fields["NodeId"], fields["NodeInstanceId"])
+        for existing in self.mSelectPipeline.getNodeList():
+            if existing is not node and self.mEditor.node_identity(existing) == new_key:
+                self.showStyledMessage("Edit Node", "A node with this NodeName, NodeId, and NodeInstanceId already exists.")
+                return
+        self.restorePipelineBaseGeometry()
+        self.mEditor.update_node_fields(node, fields)
+        self.refreshEditedCanvas()
+
+    def handleLinkToolClick(self, port_hit):
+        if port_hit is None:
+            self.mEditor.pending_src_port = None
+            if hasattr(self, "mCanvas"):
+                self.mCanvas.setPendingSourcePort(None)
+            self.statusBar().showMessage("Link cancelled", 2500)
+            self.updateEditControls()
+            return
+        node, port, direction = port_hit
+        if self.mEditor.pending_src_port is None:
+            if direction != "output":
+                self.showStyledMessage("Create Link", "Select an output port first.")
+                return
+            self.mEditor.pending_src_port = port
+            if hasattr(self, "mCanvas"):
+                self.mCanvas.setPendingSourcePort(port)
+            self.statusBar().showMessage("Source selected: %s_%s" % (port.getPortName(), port.getPortId()), 4000)
+            return
+        if direction == "output":
+            self.mEditor.pending_src_port = port
+            if hasattr(self, "mCanvas"):
+                self.mCanvas.setPendingSourcePort(port)
+            self.statusBar().showMessage("Source changed: %s_%s" % (port.getPortName(), port.getPortId()), 4000)
+            return
+        if direction != "input":
+            self.showStyledMessage("Create Link", "Select an input port as the destination.")
+            return
+        src_port = self.mEditor.pending_src_port
+        self.mEditor.pending_src_port = None
+        if hasattr(self, "mCanvas"):
+            self.mCanvas.setPendingSourcePort(None)
+        self.restorePipelineBaseGeometry()
+        self.mEditor.add_link(src_port, port)
+        self.refreshEditedCanvas()
+        self.showLinkDetails(src_port, port)
+
+    def deleteCurrentSelection(self):
+        if self.mSelectedLink is not None:
+            src, dst = self.mSelectedLink
+            self.restorePipelineBaseGeometry()
+            self.mEditor.delete_link(src, dst)
+            self.mSelectedLink = None
+            self.refreshEditedCanvas()
+            return
+        if self.mSelectedNode is not None:
+            self.restorePipelineBaseGeometry()
+            self.mEditor.delete_node(self.mSelectedNode)
+            self.mSelectedNode = None
+            self.refreshEditedCanvas()
+            return
+        self.showStyledMessage("Delete", "Select a node or link before using Delete.")
+
+    def showDeleteContextMenu(self, global_pos, node=None, link=None):
+        if not self.mEditMode or not self.mEditor.enabled:
+            return
+        menu = QMenu(self)
+        action = menu.addAction("Delete Link" if link is not None else "Delete Node")
+        chosen = menu.exec_(global_pos)
+        if chosen is not action:
+            return
+        if link is not None:
+            self.mSelectedLink = link
+            self.mSelectedNode = None
+        elif node is not None:
+            self.mSelectedNode = node
+            self.mSelectedLink = None
+        self.deleteCurrentSelection()
 
     def updateTreeWidget(self):
         '''
-            @Func:给左侧树形选择栏添加item
+            @Func:缁欏乏渚ф爲褰㈤€夋嫨鏍忔坊鍔爄tem
         '''
         print(self.mUseCase.getPipelineMap().keys())
         for useCase in self.mUseCase.getPipelineMap().keys():
@@ -704,7 +1390,7 @@ class MainWindow(QMainWindow):
 
     def initImageWindow(self):
         '''
-            @Func:初始化最下层Qwidget，以及承载NodePainter的Canvas
+            @Func:鍒濆鍖栨渶涓嬪眰Qwidget锛屼互鍙婃壙杞絅odePainter鐨凜anvas
         '''
         Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
         self.imageWindow = QWidget(self.mCanvasViewport)
@@ -764,7 +1450,7 @@ class MainWindow(QMainWindow):
 
     def initCanvas(self):
         '''
-            @Func:在Canvas上绘制NodePainter
+            @Func:鍦–anvas涓婄粯鍒禢odePainter
         '''
         Utils.LogD(self.TAG, ("%s: +" % (sys._getframe().f_code.co_name)))
         i = 0
@@ -822,7 +1508,8 @@ class MainWindow(QMainWindow):
         self.mCanvas.update()
         self.mCanvas.move(self.mCanvasWidthBottomPos)
         self.centerCanvas()
-        self.hideInspector()
+        self.mInspectorCollapsed = False
+        self.showPipelineDetails()
         Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
 
     def preparePipelineBaseLayout(self):
@@ -937,14 +1624,13 @@ class MainWindow(QMainWindow):
         self.updateCanvasViewportSize()
 
     def applyDefaultPanelWidths(self):
+        inspector_width = self.mInspectorDefaultWidth if not self.mInspectorCollapsed else 0
         if self.mExplorerVisible:
             self.mImageBrowserWidth = self.EXPLORER_MIN_WIDTH
             self.mLastExplorerWidth = self.EXPLORER_MIN_WIDTH
             self.mSplitter.setSizes([self.EXPLORER_MIN_WIDTH,
-                                     max(600, self.mSplitter.width() - self.EXPLORER_MIN_WIDTH)])
-        if self.mInspector.isVisible():
-            self.mContentSplitter.setSizes([max(520, self.mContentSplitter.width() - self.mInspectorDefaultWidth),
-                                            self.mInspectorDefaultWidth])
+                                     max(600, self.mSplitter.width() - self.EXPLORER_MIN_WIDTH - inspector_width),
+                                     inspector_width])
         self.updateCanvasViewportSize()
 
     def toggleExplorer(self):
@@ -954,12 +1640,14 @@ class MainWindow(QMainWindow):
             width = max(self.EXPLORER_MIN_WIDTH, self.mLastExplorerWidth)
             total = max(self.mSplitter.width(), width + 600)
             self.mLeftPanel.show()
-            self.mSplitter.setSizes([width, max(600, total - width)])
+            inspector_width = self.mInspector.width() if not self.mInspectorCollapsed else 0
+            self.mSplitter.setSizes([width, max(600, total - width - inspector_width), inspector_width])
         else:
             if self.mLeftPanel.width() > 0:
                 self.mLastExplorerWidth = self.mLeftPanel.width()
             self.mLeftPanel.hide()
-            self.mSplitter.setSizes([0, max(600, self.mSplitter.width())])
+            inspector_width = self.mInspector.width() if not self.mInspectorCollapsed else 0
+            self.mSplitter.setSizes([0, max(600, self.mSplitter.width() - inspector_width), inspector_width])
         self.updateCanvasViewportSize()
         self.centerCanvas()
 
@@ -1029,6 +1717,42 @@ class MainWindow(QMainWindow):
         directory = self.getLastOpenDir(os.path.dirname(os.path.abspath(__file__)))
         return os.path.join(directory, "%s_snapshot.jpg" % safe_name)
 
+    def buildSnapshotPixmap(self, contentPixmap):
+        if contentPixmap.isNull():
+            return contentPixmap
+
+        title_height = self.SNAPSHOT_TITLE_HEIGHT
+        title_margin_x = 32
+        snapshotPixmap = QPixmap(contentPixmap.width(), contentPixmap.height() + title_height)
+        snapshotPixmap.fill(QColor(COLORS["bg"]))
+
+        painter = QPainter(snapshotPixmap)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setRenderHint(QPainter.TextAntialiasing, True)
+
+        title = self.mCurrentPipelineName if self.mCurrentPipelineName else "Pipeline snapshot"
+        title_font = font(20, bold=True)
+        metrics = QFontMetrics(title_font)
+        available_width = max(80, contentPixmap.width() - title_margin_x * 2)
+        while metrics.horizontalAdvance(title) > available_width and title_font.pointSize() > 12:
+            title_font.setPointSize(title_font.pointSize() - 1)
+            metrics = QFontMetrics(title_font)
+
+        title_text = metrics.elidedText(title, Qt.ElideRight, available_width)
+        painter.setFont(title_font)
+        painter.setPen(QColor(COLORS["text"]))
+        painter.drawText(QRect(title_margin_x, 18, available_width, metrics.height() + 6),
+                         Qt.AlignLeft | Qt.AlignVCenter,
+                         title_text)
+
+        painter.setPen(QPen(QColor(COLORS["accent"]), 3))
+        painter.drawLine(title_margin_x, title_height - 16,
+                         min(contentPixmap.width() - title_margin_x, title_margin_x + 220),
+                         title_height - 16)
+        painter.drawPixmap(0, title_height, contentPixmap)
+        painter.end()
+        return snapshotPixmap
+
     def snapshotPipeline(self):
         if self.mSelectPipeline is None or len(self.mNodePainterList) == 0:
             self.showStyledMessage("Snapshot", "Please render a pipeline before saving a snapshot.")
@@ -1051,7 +1775,8 @@ class MainWindow(QMainWindow):
         self.mCanvas.update()
         QApplication.processEvents()
         pixmap = self.mCanvas.grab(snapshotRect)
-        if pixmap.isNull() or not pixmap.save(fileName, "JPEG", 95):
+        snapshotPixmap = self.buildSnapshotPixmap(pixmap)
+        if snapshotPixmap.isNull() or not snapshotPixmap.save(fileName, "JPEG", 95):
             self.showStyledMessage("Snapshot", "Failed to save the JPEG snapshot.")
             return
 
@@ -1163,32 +1888,82 @@ class MainWindow(QMainWindow):
         for nodePainter in self.mNodePainterList:
             nodePainter.setSelected(nodePainter.mNode is selected_node)
 
-    def ensureInspectorVisible(self):
+    def ensureInspectorVisible(self, force=False):
+        if self.mInspectorCollapsed and not force:
+            return False
         if not self.mInspector.isVisible():
+            self.mInspectorCollapsed = False
             self.mInspector.show()
-            self.mContentSplitter.setSizes([max(520, self.mContentSplitter.width() - self.mInspectorDefaultWidth),
-                                            self.mInspectorDefaultWidth])
+            left_width = self.mLeftPanel.width() if self.mLeftPanel.isVisible() else 0
+            if left_width > 0:
+                self.mImageBrowserWidth = left_width
+                self.mLastExplorerWidth = left_width
+            total = self.mSplitter.width()
+            self.mSplitter.setSizes([left_width,
+                                     max(600, total - left_width - self.mInspectorDefaultWidth),
+                                     self.mInspectorDefaultWidth])
         self.mInspector.raise_()
-        self.positionSnapshotButton()
+        self.positionFloatingControls()
+        self.updateEditControls()
+        return True
 
     def hideInspector(self):
         if hasattr(self, "mInspector"):
+            left_width = self.mLeftPanel.width() if self.mLeftPanel.isVisible() else 0
+            if left_width > 0:
+                self.mImageBrowserWidth = left_width
+                self.mLastExplorerWidth = left_width
+            self.mInspectorCollapsed = True
+            self.mSplitter.setSizes([left_width,
+                                     max(600, self.mSplitter.width() - left_width),
+                                     0])
             self.mInspector.hide()
-        self.positionSnapshotButton()
+        self.positionFloatingControls()
+        self.updateEditControls()
+
+    def toggleInspectorPanel(self):
+        if not hasattr(self, "mInspector"):
+            return
+        if self.mInspectorCollapsed or not self.mInspector.isVisible():
+            self.mInspectorCollapsed = False
+            if self.mInspectorMode == "node" and self.mSelectedNode is not None:
+                self.showNodeDetails(self.mSelectedNode)
+            elif self.mInspectorMode == "link" and self.mSelectedLink is not None:
+                self.showLinkDetails(self.mSelectedLink[0], self.mSelectedLink[1])
+            else:
+                self.showPipelineDetails()
+            self.ensureInspectorVisible(force=True)
+        else:
+            self.hideInspector()
+
+    def toggleInspectorFromAction(self, checked=None):
+        if checked:
+            self.mInspectorCollapsed = False
+            self.toggleInspectorPanel()
+        else:
+            self.hideInspector()
 
     def setInspectorTree(self, title, subtitle):
-        self.ensureInspectorVisible()
+        if not self.ensureInspectorVisible():
+            return False
         self.mInspectorTitle.setText(title)
         self.mInspectorSubtitle.setText(subtitle)
+        self.mInspectorEditing = True
         self.mInspectorBody.clear()
+        self.mInspectorEditing = False
         self.positionInspectorDrawer()
+        return True
 
-    def addTreeItem(self, parent, field, value=""):
+    def addTreeItem(self, parent, field, value="", editable=False, edit_data=None):
         item = QTreeWidgetItem(parent if parent is not None else self.mInspectorBody)
         item.setText(0, str(field))
         item.setText(1, "" if value is None else str(value))
         item.setForeground(0, QColor(COLORS["text"]))
         item.setForeground(1, QColor(COLORS["text_muted"]))
+        if editable:
+            item.setFlags(item.flags() | Qt.ItemIsEditable)
+            item.setData(1, Qt.UserRole, edit_data)
+            item.setForeground(1, QColor(COLORS["text"]))
         return item
 
     def addValueTree(self, parent, field, value):
@@ -1204,23 +1979,25 @@ class MainWindow(QMainWindow):
             return item
         return self.addTreeItem(parent, field, value)
 
-    def addNodeTree(self, parent, node, title=None):
+    def addNodeTree(self, parent, node, title=None, editable=False):
         node_item = self.addTreeItem(parent, title or self.formatNodeName(node), "")
-        self.addTreeItem(node_item, "NodeName", node.getNodeName())
-        self.addTreeItem(node_item, "NodeId", node.getNodeId())
-        self.addTreeItem(node_item, "NodeInstance", node.getNodeInstance())
-        self.addTreeItem(node_item, "NodeInstanceId", node.getNodeInstanceId())
+        self.addTreeItem(node_item, "NodeName", node.getNodeName(), editable, ("node", node, "NodeName"))
+        self.addTreeItem(node_item, "NodeId", node.getNodeId(), editable, ("node", node, "NodeId"))
+        self.addTreeItem(node_item, "NodeInstance", node.getNodeInstance(), editable, ("node", node, "NodeInstance"))
+        self.addTreeItem(node_item, "NodeInstanceId", node.getNodeInstanceId(), editable, ("node", node, "NodeInstanceId"))
         self.addTreeItem(node_item, "Level", ", ".join(map(str, node.getNodeLevel())))
-        self.addTreeItem(node_item, "InputPortCount", len(node.getInputPort()))
-        self.addTreeItem(node_item, "OutputPortCount", len(node.getOutputPort()))
+        self.addTreeItem(node_item, "InputPortCount", len(node.getInputPort()), editable,
+                         ("port_count", node, "input"))
+        self.addTreeItem(node_item, "OutputPortCount", len(node.getOutputPort()), editable,
+                         ("port_count", node, "output"))
 
         input_item = self.addTreeItem(node_item, "InputPorts", len(node.getInputPort()))
-        for port in node.getInputPort():
-            self.addPortTree(input_item, port)
+        for index, port in enumerate(node.getInputPort()):
+            self.addPortTree(input_item, port, editable=editable, edit_node=node, direction="input", port_index=index)
 
         output_item = self.addTreeItem(node_item, "OutputPorts", len(node.getOutputPort()))
-        for port in node.getOutputPort():
-            self.addPortTree(output_item, port)
+        for index, port in enumerate(node.getOutputPort()):
+            self.addPortTree(output_item, port, editable=editable, edit_node=node, direction="output", port_index=index)
 
         prop_item = self.addTreeItem(node_item, "Properties", len(node.getNodeProp()))
         for idx, prop in enumerate(node.getNodeProp()):
@@ -1231,10 +2008,12 @@ class MainWindow(QMainWindow):
             self.addTreeItem(one_prop, "Value", prop[3])
         return node_item
 
-    def addPortTree(self, parent, port, title=None):
+    def addPortTree(self, parent, port, title=None, editable=False, edit_node=None, direction=None, port_index=None):
         port_item = self.addTreeItem(parent, title or "%s_%s" % (port.getPortName(), port.getPortId()), "")
-        self.addTreeItem(port_item, "PortName", port.getPortName())
-        self.addTreeItem(port_item, "PortId", port.getPortId())
+        self.addTreeItem(port_item, "PortName", port.getPortName(), editable,
+                         ("port", edit_node, direction, port_index, "PortName") if editable else None)
+        self.addTreeItem(port_item, "PortId", port.getPortId(), editable,
+                         ("port", edit_node, direction, port_index, "PortId") if editable else None)
         self.addTreeItem(port_item, "NodeName", port.getNodeName())
         self.addTreeItem(port_item, "NodeId", port.getNodeId())
         self.addTreeItem(port_item, "NodeInstance", port.getNodeInstance())
@@ -1251,13 +2030,81 @@ class MainWindow(QMainWindow):
         self.addPortTree(link_item, dst_port, "InputPort")
         return link_item
 
+    def resizedPortFields(self, ports, count, prefix):
+        resized = [(port.getPortName(), port.getPortId()) for port in ports[:count]]
+        for index in range(len(resized), count):
+            resized.append(("%s_%d" % (prefix, index), str(index)))
+        return resized
+
+    def handleInspectorItemChanged(self, item, column):
+        if self.mInspectorEditing or column != 1 or not self.mEditMode or not self.mEditor.enabled:
+            return
+        edit_data = item.data(1, Qt.UserRole)
+        if edit_data is None:
+            return
+        kind = edit_data[0]
+        node = edit_data[1]
+        if node is None:
+            return
+        fields = {
+            "NodeName": node.getNodeName(),
+            "NodeId": node.getNodeId(),
+            "NodeInstance": node.getNodeInstance(),
+            "NodeInstanceId": node.getNodeInstanceId(),
+            "InputPorts": [(port.getPortName(), port.getPortId()) for port in node.getInputPort()],
+            "OutputPorts": [(port.getPortName(), port.getPortId()) for port in node.getOutputPort()]
+        }
+        value = item.text(1).strip()
+        if kind == "node":
+            fields[edit_data[2]] = value
+        elif kind == "port_count":
+            _, _, direction = edit_data
+            current_ports = node.getInputPort() if direction == "input" else node.getOutputPort()
+            fallback = len(current_ports)
+            count = self.normalizedPortCount(value, fallback)
+            if str(count) != value:
+                self.mInspectorEditing = True
+                item.setText(1, str(count))
+                self.mInspectorEditing = False
+            if direction == "input":
+                fields["InputPorts"] = self.resizedPortFields(current_ports, count, "input")
+            else:
+                fields["OutputPorts"] = self.resizedPortFields(current_ports, count, "output")
+        elif kind == "port":
+            _, _, direction, port_index, field_name = edit_data
+            port_list_name = "InputPorts" if direction == "input" else "OutputPorts"
+            ports = list(fields[port_list_name])
+            if port_index is None or port_index >= len(ports):
+                return
+            name, port_id = ports[port_index]
+            ports[port_index] = (value, port_id) if field_name == "PortName" else (name, value)
+            fields[port_list_name] = ports
+        self.applyInspectorNodeEdit(node, fields)
+
+    def applyInspectorNodeEdit(self, node, fields):
+        if not self.mEditor.enabled or node is None:
+            return
+        new_key = (fields["NodeName"], fields["NodeId"], fields["NodeInstanceId"])
+        for existing in self.mSelectPipeline.getNodeList():
+            if existing is not node and self.mEditor.node_identity(existing) == new_key:
+                self.showStyledMessage("Edit Node", "A node with this NodeName, NodeId, and NodeInstanceId already exists.")
+                self.showNodeDetails(node)
+                return
+        self.restorePipelineBaseGeometry()
+        self.mEditor.update_node_fields(node, fields)
+        self.refreshEditedCanvas()
+        self.showNodeDetails(node)
+        self.statusBar().showMessage("Node updated", 3000)
+
     def showPipelineDetails(self):
         self.mInspectorMode = "pipeline"
         self.mSelectedLink = None
         self.setSelectedNode(None)
         if hasattr(self, "mCanvas"):
             self.mCanvas.setSelectedLink(None, None)
-        self.setInspectorTree("Pipeline Details", self.mCurrentPipelineName or "Background selection")
+        if not self.setInspectorTree("Pipeline Details", self.mCurrentPipelineName or "Background selection"):
+            self.updateEditControls()
+            return
         node_count = 0
         link_count = 0
         if self.mSelectPipeline is not None:
@@ -1297,6 +2144,7 @@ class MainWindow(QMainWindow):
                 link_index += 1
         self.mInspectorBody.collapseAll()
         summary.setExpanded(True)
+        self.updateEditControls()
 
     def showNodeDetails(self, node):
         self.mInspectorMode = "node"
@@ -1304,10 +2152,15 @@ class MainWindow(QMainWindow):
         self.setSelectedNode(node)
         if hasattr(self, "mCanvas"):
             self.mCanvas.setSelectedLink(None, None)
-        self.setInspectorTree("Node Details", self.formatNodeName(node))
-        root = self.addNodeTree(None, node)
+        if not self.setInspectorTree("Node Details", self.formatNodeName(node)):
+            self.updateEditControls()
+            return
+        self.mInspectorEditing = True
+        root = self.addNodeTree(None, node, editable=(self.mEditMode and self.mEditor.enabled))
+        self.mInspectorEditing = False
         self.mInspectorBody.collapseAll()
         root.setExpanded(True)
+        self.updateEditControls()
 
     def showLinkDetails(self, src_port, dst_port):
         self.mInspectorMode = "link"
@@ -1317,15 +2170,34 @@ class MainWindow(QMainWindow):
             self.mCanvas.setSelectedLink(src_port, dst_port)
         src_node = self.findNodeForPort(src_port)
         dst_node = self.findNodeForPort(dst_port)
-        self.setInspectorTree("Link Details",
-                              "%s -> %s" % (self.formatNodeName(src_node), self.formatNodeName(dst_node)))
+        if not self.setInspectorTree("Link Details",
+                                     "%s -> %s" % (self.formatNodeName(src_node), self.formatNodeName(dst_node))):
+            self.updateEditControls()
+            return
         root = self.addLinkTree(None, src_port, dst_port)
         self.mInspectorBody.expandAll()
+        self.updateEditControls()
 
     def isCanvasSurface(self, obj):
         return obj in (getattr(self, "mCanvasViewport", None),
                        getattr(self, "imageWindow", None),
                        getattr(self, "mCanvas", None))
+
+    def updateHoveredLink(self, obj, event):
+        if not hasattr(self, "mCanvas") or not hasattr(event, "pos"):
+            return
+        if obj == self.mCanvas:
+            canvas_pos = event.pos()
+        elif self.isCanvasSurface(obj):
+            canvas_pos = self.mCanvas.mapFromGlobal(obj.mapToGlobal(event.pos()))
+        else:
+            self.mCanvas.setHoveredLink(None, None)
+            return
+        hit = self.mCanvas.hitTestLink(canvas_pos)
+        if hit is None:
+            self.mCanvas.setHoveredLink(None, None)
+        else:
+            self.mCanvas.setHoveredLink(hit[0], hit[1])
 
     def isMenuPopupOpen(self):
         menubar = getattr(self, "mMenuBar", None)
@@ -1347,12 +2219,12 @@ class MainWindow(QMainWindow):
         return False
 
     def recieveMsg(self, item):
-        QMessageBox.information(self, 'QListView', '你选择了：' + self.list[item.row()])
+        QMessageBox.information(self, 'QListView', '浣犻€夋嫨浜嗭細' + self.list[item.row()])
 
     def recieveChildMsgSlot(self, msg):
         '''
-        @Func:注册到nodePainter中的额槽函数，接收nodePainter鼠標press事件
-              目前的作用是在mainWindow中用来解决鼠标悬停显示prop与鼠标按压拖拽node功能的
+        @Func:娉ㄥ唽鍒皀odePainter涓殑棰濇Ы鍑芥暟锛屾帴鏀秐odePainter榧犳press浜嬩欢
+              鐩墠鐨勪綔鐢ㄦ槸鍦╩ainWindow涓敤鏉ヨВ鍐抽紶鏍囨偓鍋滄樉绀簆rop涓庨紶鏍囨寜鍘嬫嫋鎷絥ode鍔熻兘鐨?
         '''
         msgType, msgValue = msg.getMsg()
         if msgType == MsgType.LeftButton:
@@ -1365,7 +2237,7 @@ class MainWindow(QMainWindow):
 
     def mousePressEvent(self, event):
         '''
-            @Func:重载一下鼠标按下事件(单击)
+            @Func:閲嶈浇涓€涓嬮紶鏍囨寜涓嬩簨浠?鍗曞嚮)
         '''
         if event.button() == Qt.LeftButton:
             if self.mImageBrowserChange == False:
@@ -1381,9 +2253,9 @@ class MainWindow(QMainWindow):
                 #            ("recieve mousePressEvent", "self.mImageBrowserStart:", self.mImageBrowserStart))
 
     def wheelEvent(self, event):
-        angle = event.angleDelta() / 8    # 返回QPoint对象，为滚轮转过的数值，单位为1/8度
-        angleX = angle.x()                # 水平滚过的距离(此处用不上)
-        angleY = angle.y()                # 竖直滚过的距离
+        angle = event.angleDelta() / 8    # 杩斿洖QPoint瀵硅薄锛屼负婊氳疆杞繃鐨勬暟鍊硷紝鍗曚綅涓?/8搴?
+        angleX = angle.x()                # 姘村钩婊氳繃鐨勮窛绂?姝ゅ鐢ㄤ笉涓?
+        angleY = angle.y()                # 绔栫洿婊氳繃鐨勮窛绂?
         step = int(angleY * 2.5)
         if self.mMouseInBrowser is False:
             if self.mKeyCtrlStatus:
@@ -1395,7 +2267,7 @@ class MainWindow(QMainWindow):
 
         if angleY > 0:
             pass
-        else:                                                                  # 滚轮下滚
+        else:                                                                  # 婊氳疆涓嬫粴
             pass
 
     def updateBrowserSize(self):
@@ -1510,13 +2382,15 @@ class MainWindow(QMainWindow):
                 return True
 
         '''
-            @Func:处理QEvent.HoverMove事件，鼠标指针处于树形结构的选择框附件时，变为左右箭头
+            @Func:澶勭悊QEvent.HoverMove浜嬩欢锛岄紶鏍囨寚閽堝浜庢爲褰㈢粨鏋勭殑閫夋嫨妗嗛檮浠舵椂锛屽彉涓哄乏鍙崇澶?
         '''
         menubar = getattr(self, "mMenuBar", None)
         if object is menubar and event.type() in (QEvent.MouseMove, QEvent.HoverMove) and self.isMenuPopupOpen():
             return True
 
         if event.type() in (QEvent.HoverMove, QEvent.MouseMove):
+            if self.isCanvasSurface(object) or object in self.mNodePainterList:
+                self.updateHoveredLink(object, event)
             if hasattr(event, "globalPos"):
                 pos = self.mapFromGlobal(event.globalPos())
             else:
@@ -1533,17 +2407,58 @@ class MainWindow(QMainWindow):
                 self.mCanvas.update()
                 return True
 
-        if self.isCanvasSurface(object) and event.type() == QEvent.MouseButtonPress and event.button() == Qt.RightButton:
-            if object == getattr(self, "mCanvas", None):
-                if self.mCanvas.hitTestLink(event.pos()) is None:
-                    self.showPipelineDetails()
-            elif object in (getattr(self, "mCanvasViewport", None), getattr(self, "imageWindow", None)):
-                self.showPipelineDetails()
+        if object in self.mNodePainterList and event.type() == QEvent.MouseButtonPress and event.button() == Qt.RightButton:
+            if self.mEditMode and self.mEditor.enabled:
+                self.showDeleteContextMenu(event.globalPos(), node=object.mNode)
+            else:
+                self.showNodeDetails(object.mNode)
             event.accept()
             return True
 
+        if self.isCanvasSurface(object) and event.type() == QEvent.MouseButtonPress and event.button() == Qt.RightButton:
+            if object == getattr(self, "mCanvas", None):
+                hit = self.mCanvas.hitTestLink(event.pos())
+                if self.mEditMode and self.mEditor.enabled and hit is not None:
+                    self.showDeleteContextMenu(event.globalPos(), link=hit)
+                else:
+                    if self.mEditMode and self.mEditor.enabled and self.mEditor.pending_src_port is not None:
+                        self.handleLinkToolClick(None)
+                    elif hit is None:
+                        self.showPipelineDetails()
+                    else:
+                        self.showLinkDetails(hit[0], hit[1])
+            elif object in (getattr(self, "mCanvasViewport", None), getattr(self, "imageWindow", None)):
+                if self.mEditMode and self.mEditor.enabled and self.mEditor.pending_src_port is not None:
+                    self.handleLinkToolClick(None)
+                else:
+                    self.showPipelineDetails()
+            event.accept()
+            return True
+
+        if object in self.mNodePainterList and event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+            if self.mEditMode and self.mEditor.enabled:
+                canvas_pos = object.pos() + event.pos()
+                port_hit = self.mCanvas.hitTestPort(canvas_pos)
+                if port_hit is not None:
+                    self.handleLinkToolClick(port_hit)
+                    event.accept()
+                    return True
+                else:
+                    self.showNodeDetails(object.mNode)
+                    return False
+
         if self.isCanvasSurface(object) and event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
             if object == getattr(self, "mCanvas", None):
+                if self.mEditMode and self.mEditor.enabled:
+                    port_hit = self.mCanvas.hitTestPort(event.pos())
+                    if port_hit is not None:
+                        self.handleLinkToolClick(port_hit)
+                        event.accept()
+                        return True
+                    if self.mEditor.pending_src_port is not None:
+                        self.handleLinkToolClick(None)
+                        event.accept()
+                        return True
                 hit = self.mCanvas.hitTestLink(event.pos())
                 if hit is not None:
                     self.showLinkDetails(hit[0], hit[1])
@@ -1575,6 +2490,20 @@ class MainWindow(QMainWindow):
         return False
 
     def keyPressEvent(self, keyEvent):
+        if self.mEditMode and self.mEditor.enabled and keyEvent.modifiers() & Qt.ControlModifier:
+            if keyEvent.key() == Qt.Key_Z:
+                self.undoEdit()
+                keyEvent.accept()
+                return
+            if keyEvent.key() == Qt.Key_Y:
+                self.redoEdit()
+                keyEvent.accept()
+                return
+        if keyEvent.key() == Qt.Key_Delete and self.mEditMode and self.mEditor.enabled:
+            if self.mSelectedNode is not None or self.mSelectedLink is not None:
+                self.deleteCurrentSelection()
+                keyEvent.accept()
+                return
         if keyEvent.key() == Qt.Key_Shift:
             self.mKeyShiftStatus = True
             # keyEvent.accept()
