@@ -4,7 +4,7 @@ from PyQt5.QtGui import QPalette, QPen, QBrush, QColor, QPainter, QFont
 from PyQt5.QtWidgets import QFrame
 
 from Utils import Utils
-import math
+from BezierLine import BezierLineRenderer
 
 class CanvasImage(QFrame):
     TAG = "CanvasImage"
@@ -81,28 +81,15 @@ class CanvasImage(QFrame):
     def drawLink(self, srcPort, dstPort, painter):
         if srcPort != None and dstPort != None and \
                 srcPort.getPortPos() != None and dstPort.getPortPos() != None:
-            # Utils.LogD(self.TAG, ("--------- draw line %s --> %s" % (srcPort.getPortName(), dstPort.getPortName())))
-            # Utils.LogD(self.TAG, srcPort.getPortPos())
-            # Utils.LogD(self.TAG, srcPort.getParentNodePos())
-            # Utils.LogD(self.TAG, dstPort.getPortPos())
-            # Utils.LogD(self.TAG, dstPort.getParentNodePos())
+            for node in self.mNodeList:
+                if node.matchPort(dstPort):
+                    pen = self.mNodeMapPainter.get(node)
+                    if pen is not None:
+                        BezierLineRenderer.draw_bezier_link(painter, srcPort, dstPort, pen, self.mRadius)
+                        return
             startPont = srcPort.getPortPos() + srcPort.getParentNodePos() + QPoint(srcPort.getWidth(), 0)
             endPoint = dstPort.getPortPos() + dstPort.getParentNodePos()
             painter.drawLine(startPont, endPoint)
-            self.drawSolidCircle(startPont, self.mRadius, painter)
-            self.drawSolidCircle(endPoint, self.mRadius, painter)
-
-    def drawSolidCircle(self, point, radius, painter):
-        for r in range(1, radius):
-            radian = -math.pi
-            while True:
-                if radian > math.pi:
-                    break
-                x = r * math.cos(radian)
-                y = r * math.sin(radian)
-                pos = QPointF(point.x() + x, point.y() + y)
-                painter.drawPoint(pos)
-                radian += 0.2
 
     def initPainterInstance(self, nodeList):
         for node in nodeList:

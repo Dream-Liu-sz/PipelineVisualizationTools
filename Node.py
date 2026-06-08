@@ -330,67 +330,23 @@ class NodeDes(object):
     def sortOutputPort(self):
         Utils.LogV(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
         self.mChildNodeSortList = list(self.mChildNodeToOutputPortMap.keys())
-        '''
-        # childNode 按照绑定到 thisNode 的port数量从大到小排序
-        '''
-        for i in range(0, len(self.mChildNodeSortList)):
-            for j in range(0, len(self.mChildNodeSortList) - i - 1):
-                portNum = len(self.mChildNodeToOutputPortMap.get(self.mChildNodeSortList[j]))
-                nextPortNum = len(self.mChildNodeToOutputPortMap.get(self.mChildNodeSortList[j + 1]))
-                if portNum < nextPortNum:
-                    # Utils.LogD(self.TAG, ("+ temp[j] ", id(self.mChildNodeSortList[j]), "node ", self.mChildNodeSortList[j].getNodeName() + self.mChildNodeSortList[j].getNodeInstanceId(),
-                    #                       "temp[j+1] ", "node", id(self.mChildNodeSortList[j + 1]), self.mChildNodeSortList[j + 1].getNodeName() + self.mChildNodeSortList[j + 1].getNodeInstanceId()))
-                    self.mChildNodeSortList[j + 1], self.mChildNodeSortList[j] = self.mChildNodeSortList[j], \
-                                                                                 self.mChildNodeSortList[j + 1]
 
-        '''
-        # 根据上面的排序结果对this node output Port排序，即把thisNode输出到同一个node的port，按照这些port输出到inputPort的数量从大到小排序
-        # 比如：IFE 有 0，1，2 port 输出到 stats Node，但是 0 也需要输出到另外的port，0将会被排序到最前面
-        '''
-        for node in self.mChildNodeSortList:
-            portList = self.mChildNodeToOutputPortMap.get(node)
-            for i in range(0, len(portList)):
-                for j in range(0, len(portList) - i - 1):
-                    portNum = len(self.mLinkDes.get(portList[j]))
-                    nextPortNum = len(self.mLinkDes.get(portList[j + 1]))
-                    if portNum < nextPortNum:
-                        # Utils.LogD(self.TAG, ("+ temp[j] ", id(portList[j]), "node ", portList[j].getPortName() + portList[j].getPortId(),
-                        #                       "temp[j+1] ", "node", id(portList[j + 1]), portList[j + 1].getPortName() + portList[j + 1].getPortId()))
-                        portList[j + 1], portList[j] = portList[j], portList[j + 1]
-                        # Utils.LogD(self.TAG, ("- temp[j] ", id(portList[j]), "node ", portList[j].getPortName() + portList[j].getPortId(),
-                        #                       "temp[j+1] ", "node", id(portList[j + 1]), portList[j + 1].getPortName() + portList[j + 1].getPortId()))
+        if len(self.mChildNodeSortList) > 0:
+            orgLength = len(self.mOutputPortList)
+            self.mOutputPortList.clear()
+            for node in self.mChildNodeSortList:
+                portList = self.mChildNodeToOutputPortMap.get(node)
+                for outputPort in portList:
+                    need = True
+                    for port in self.mOutputPortList:
+                        if port.match(outputPort):
+                            need = False
+                    if need:
+                        self.mOutputPortList.append(outputPort)
 
-        '''
-        # 上面的执行完成后，childNode 排序完，childNode 绑定的outputPort也排序完了，所以重新生成 mOutputPortList
-        # 这样后面计算port位置时直接按顺序从mOutputPortList中按顺序取出，并计算pos就行
-        '''
-        orgLength = len(self.mOutputPortList)
-        orgList = list.copy(self.mOutputPortList)
-        self.mOutputPortList.clear()
-        for node in self.mChildNodeSortList:
-            # Utils.LogD(self.TAG, ("node ", node.getNodeName() + node.getNodeInstanceId(), "length ",
-            #                       len(self.mChildNodeToOutputPortMap.get(node))))
-            portList = self.mChildNodeToOutputPortMap.get(node)
-            for outputPort in portList:
-                need = True
-                for port in self.mOutputPortList:
-                    if port.match(outputPort):
-                        need = False
-                if need:
-                    self.mOutputPortList.append(outputPort)
-
-        newLength = len(self.mOutputPortList)
-
-        if orgLength != newLength:
-            Utils.LogE(self.TAG, ("%s: orgLength %d, newLength %d" % (sys._getframe().f_code.co_name, orgLength, newLength)))
-            for orgPort in orgList:
-                Utils.LogE(self.TAG, ("%s: %s orgPort %s" % (sys._getframe().f_code.co_name,
-                    self.mNodeName + "_" + self.mNodeInstanceId, orgPort.getPortName()+ "_" + orgPort.getPortId())))
-
-            for newPort in self.mOutputPortList:
-                Utils.LogE(self.TAG, ("%s: %s newPort %s" % (sys._getframe().f_code.co_name,
-                    self.mNodeName + "_" + self.mNodeInstanceId, newPort.getPortName() + "_" + newPort.getPortId())))
-            # exit(0)
+            newLength = len(self.mOutputPortList)
+            if orgLength != newLength:
+                Utils.LogE(self.TAG, ("%s: orgLength %d, newLength %d" % (sys._getframe().f_code.co_name, orgLength, newLength)))
 
         Utils.LogV(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
 
@@ -460,93 +416,17 @@ class NodeDes(object):
     def calInputPortPos(self, font):
         inputPortLength = len(self.mInputPortList)
         inputPortPortion = int(self.mNodeSize.height() / (inputPortLength + 1))
-        parentNodeList = list(self.mParentNodeToInputPortMap.keys())
-        '''
-        @func: 计算inputport的顺序，为了解决排序导致的线段交叉问题
-        @原理：对比inputPort(由于某几个inputport会连接到同一个node，所以拿第一个就行) <-- outputPort的pos，
-              规则如下：
-              1）current parent node 的outputPort pos.y 与next parent node的output的pos.y差值小于30，且current.x 小于 next.x
-                 那么则交换node在list中的位置
-              2）current parent node 的outputPort pos.y < next parent node的output的pos.y，也需要交换位置
-              3）outputPort如果没有pos，那么对比node pos
-              
-        '''
-        for i in range(0, len(parentNodeList)):
-            for j in range(0, len(parentNodeList) - i - 1):
-                if parentNodeList[j].getNodePos() != None and parentNodeList[j + 1].getNodePos() != None:
-                    currnetNodePos = parentNodeList[j].getNodePos()
-                    nextNodePos = parentNodeList[j + 1].getNodePos()
-                    currentNodeLink = parentNodeList[j].getLink()
-                    nextNodeLink = parentNodeList[j + 1].getLink()
-                    currnetInputPort = self.mParentNodeToInputPortMap.get(parentNodeList[j])[0]
-                    nextInputPort = self.mParentNodeToInputPortMap.get(parentNodeList[j + 1])[0]
-
-                    currentPos = None
-                    nextPos = None
-                    for outputPort in currentNodeLink.keys():
-                        for inputPort in currentNodeLink.get(outputPort):
-                            if inputPort.match(currnetInputPort):
-                                currentPos = outputPort.getPortPos() + currnetNodePos
-
-                    for outputPort in nextNodeLink.keys():
-                        for inputPort in nextNodeLink.get(outputPort):
-                            if inputPort.match(nextInputPort):
-                                nextPos = outputPort.getPortPos() + nextNodePos
-                    if currentPos is not None and nextPos is not None:
-                        currentPos += currnetNodePos
-                        nextPos += nextNodePos
-
-                        if abs(currentPos.y() - nextPos.y()) < 30 and currnetNodePos.x() < nextNodePos.x():
-                            parentNodeList[j], parentNodeList[j + 1] = parentNodeList[j + 1], parentNodeList[j]
-                        elif currentPos.y() > nextPos.y():
-                            parentNodeList[j], parentNodeList[j + 1] = parentNodeList[j + 1], parentNodeList[j]
-                    else:
-                        if currnetNodePos.y() > nextNodePos.y():
-                            parentNodeList[j], parentNodeList[j + 1] = parentNodeList[j + 1], parentNodeList[j]
-                else:
-                    Utils.LogE(self.TAG, (self.mNodeName + self.mNodeInstanceId, "Node pos is None!"))
-                    exit()
-
-        i = 1
-        tempList = []
         metrics = QFontMetrics(font)
-        '''
-        @func：上面排序完成后按照顺序计算port pos
-        '''
-        for parentNode in parentNodeList:
-            # Utils.LogD(self.TAG, ("%s: + parentNode %s, cuNode %s" % (
-            #     sys._getframe().f_code.co_name, parentNode.getNodeName(), self.mNodeName + self.mNodeInstanceId)))
-            for outputPort in parentNode.getOutputPort():
-                for inputPort in parentNode.getLink().get(outputPort):
-                    # Utils.LogD(self.TAG, ("%s: + outputPort %s, cuNode input %s len %d" % (
-                    #     sys._getframe().f_code.co_name, outputPort.getPortName(), inputPort.getPortName(),
-                    #     len(self.mInputPortList)), inputPort.getPortPos()))
-                    for childInputPort in self.mInputPortList:
-                        if childInputPort.match(inputPort) and inputPort.getPortPos() is None:
-                            pos = QPoint(0, inputPortPortion * i)
-                            textWidth = metrics.width(outputPort.getPortName())
-                            textHeight = metrics.height()
-                            childInputPort.setPortPos(pos)
-                            childInputPort.setParentNodePos(self.mNodePos)
-                            childInputPort.setWidth(textWidth)
-                            childInputPort.setHeight(textHeight)
-                            # Utils.LogD(self.TAG, ("+ match outputPort %s, cuNode input %s, this %s" % (
-                            #     outputPort.getPortName(), inputPort.getPortName() + inputPort.getNodeId() + "_" + inputPort.getNodeInstanceId(),
-                            #     childInputPort.getPortName() + childInputPort.getNodeId() + "_" + childInputPort.getNodeInstanceId()), childInputPort.getPortPos()))
-                            tempList.append(childInputPort)
-                            i += 1
-
-        if len(tempList) == len(self.mInputPortList):
-            self.mInputPortList.clear()
-            self.mInputPortList = tempList
-
-        for childInputPort in self.mInputPortList:
-            if childInputPort.getPortPos() == None:
-                Utils.LogE(self.TAG, ("%s: %s --> %s " % (
-                    sys._getframe().f_code.co_name, self.mNodeName,
-                    childInputPort.getPortName() + childInputPort.getNodeId() + "_" + childInputPort.getNodeInstanceId()),
-                                      "is", childInputPort.getPortPos()))
-                # exit(0)
+        i = 1
+        for inputPort in self.mInputPortList:
+            textWidth = metrics.width(inputPort.getPortName())
+            textHeight = metrics.height()
+            pos = QPoint(0, inputPortPortion * i)
+            inputPort.setPortPos(pos)
+            inputPort.setParentNodePos(self.mNodePos)
+            inputPort.setWidth(textWidth)
+            inputPort.setHeight(textHeight)
+            i += 1
 
         self.pruneInputPortName()
 

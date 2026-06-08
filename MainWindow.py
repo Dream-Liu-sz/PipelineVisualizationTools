@@ -363,6 +363,22 @@ class MainWindow(QMainWindow):
 
         self.mCanvas.initPainterInstance(self.mSelectPipeline.getNodeList())
         self.mCanvas.setPortLinkDes(self.mSelectPipeline.getPortLink())
+
+        max_x = 0
+        max_y = 0
+        for node in self.mSelectPipeline.getNodeList():
+            if node.getNodePos() is not None:
+                node_x = node.getNodePos().x() + node.getNodeSize().width() + 200
+                node_y = node.getNodePos().y() + node.getNodeSize().height() + 200
+                if node_x > max_x:
+                    max_x = node_x
+                if node_y > max_y:
+                    max_y = node_y
+
+        canvas_w = max(self.mCanvasWidth, max_x)
+        canvas_h = max(self.mCanvasHeight, max_y)
+        self.mCanvas.resize(int(canvas_w), int(canvas_h))
+
         self.mCanvas.update()
         self.mCanvas.move(self.mCanvasWidthBottomPos)
         Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
