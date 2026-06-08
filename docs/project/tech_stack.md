@@ -13,6 +13,7 @@ This document describes the technology stack, dependencies, and development tool
 |----------|------------|---------|---------|
 | **Language** | Python | 3.9+ | Application programming language |
 | **GUI Framework** | PyQt5 | 5.x | Desktop UI framework (QMainWindow, QTreeWidget, QWidget, etc.) |
+| **Graph Library** | networkx | 2.6+ | Directed graph construction and Sugiyama hierarchical layout |
 | **JSON Parser** | json5 | Latest | Parse JSON5 format pipeline configurations |
 | **XML Parser** | xml.etree.ElementTree | Built-in | Parse XML format pipeline configurations |
 | **Build Tool** | PyInstaller | Latest | Package application into standalone executable |
@@ -38,11 +39,22 @@ This document describes the technology stack, dependencies, and development tool
 | QCursor | PyQt5.QtGui | Cursor changes during drag |
 | QFont | PyQt5.QtGui | Font configuration for labels |
 | QFontMetrics | PyQt5.QtGui | Text measurement for layout |
+| QPainterPath | PyQt5.QtGui | Bezier curve path rendering |
 | QPalette | PyQt5.Qt | Color palette management |
 | QIcon | PyQt5.Qt | Window and action icons |
 | QPoint | PyQt5.Qt | 2D position coordinates |
 | QSize | PyQt5.Qt | 2D size dimensions |
 | QRect | PyQt5.Qt | Rectangle for overlap calculation |
+
+## networkx Components Used
+
+| Component | Usage |
+|-----------|-------|
+| `nx.DiGraph` | Directed graph representation of pipeline topology |
+| `nx.topological_sort` | Layer assignment via topological ordering |
+| `nx.is_directed_acyclic_graph` | Cycle detection for layout algorithm selection |
+| `nx.has_edge` | Edge existence checking during graph construction |
+| Graph attributes | `src_ports`, `dst_ports` stored on edges for port-level tracking |
 
 ## Project Structure
 
@@ -50,17 +62,20 @@ This document describes the technology stack, dependencies, and development tool
 Pipeline-visualization-tools/
 ├── main.py                 # Application entry point
 ├── MainWindow.py           # Main window (controller + view)
-├── CanvasWidget.py         # Drawing canvas
+├── CanvasWidget.py         # Drawing canvas (delegates to BezierLineRenderer)
 ├── NodePainter.py          # Node renderer
-├── Pipeline.py             # Pipeline model + layout algorithm
+├── LayoutEngine.py         # Sugiyama layout engine (networkx-based)
+├── BezierLine.py           # Bezier curve connection renderer
+├── Pipeline.py             # Pipeline model + level assignment
 ├── Node.py                 # Node data model
 ├── Port.py                 # Port data model
 ├── UseCase.py              # XML/JSON parser
-├── DrawLine.py             # Connection line drawing
+├── DrawLine.py             # Legacy connection line drawing (unused)
 ├── Link.py                 # Link data structure
 ├── Utils.py                # Logging and utilities
 ├── resource.py             # Compiled Qt resources
 ├── resource.qrc            # Qt resource file
+├── requirements.txt        # Python dependencies
 ├── main.spec               # PyInstaller spec file
 ├── res/
 │   └── logo.ico            # Application icon
@@ -89,7 +104,7 @@ Pipeline-visualization-tools/
 ```
 1. Create virtual environment: python -m venv venv
 2. Activate: venv\Scripts\activate
-3. Install dependencies: pip install PyQt5 json5
+3. Install dependencies: pip install -r requirements.txt
 4. Run: python main.py
 ```
 
@@ -103,12 +118,12 @@ Output: `dist/pipelineVisualization.exe`
 
 ## Dependencies
 
-| Dependency | Required | Notes |
-|------------|----------|-------|
-| PyQt5 | Yes | Core GUI framework |
-| json5 | Yes | JSON parsing |
-| PyInstaller | Build time only | Packaging tool |
-| lxml | Optional | Not currently used but available |
+| Dependency | Required | Version | Notes |
+|------------|----------|---------|-------|
+| PyQt5 | Yes | >=5.15 | Core GUI framework |
+| networkx | Yes | >=2.6 | Graph construction and Sugiyama layout algorithm |
+| json5 | Yes | Latest | JSON parsing |
+| PyInstaller | Build time only | Latest | Packaging tool |
 
 ## Maintenance
 
@@ -116,4 +131,4 @@ Output: `dist/pipelineVisualization.exe`
 - Update when new libraries are added
 - Document any version-specific requirements
 
-<!-- Metadata: Generated 2026-05-19 | Version 1.0.0 -->
+<!-- Metadata: Generated 2026-05-19 | Version 2.0.0 -->

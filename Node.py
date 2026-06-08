@@ -10,8 +10,8 @@ from Port import PortDes
 
 class NodeDes(object):
     TAG = "NodeDes"
-    NodeAdditionalLengthMap = {"IFE": 80, "Stats": 30, "Auto": 30, "BPS": 40, "Sink": 5}
-    SpecialNodeWidthMap = {"IFE": 10, "BPS": 10, "IPE": 10}
+    NodeAdditionalLengthMap = {"IFE": 52, "Stats": 22, "Auto": 22, "BPS": 30, "Sink": 4}
+    SpecialNodeWidthMap = {"IFE": 6, "BPS": 6, "IPE": 6}
     disablePortNamePruneList = ["Sensor"]
 
     def __init__(self, name, id, instance, instanceId, targetName=""):
@@ -30,8 +30,8 @@ class NodeDes(object):
         self.mNodePos = None
         self.mPortPosMap = {}
         self.mNodeLevelKey = -1
-        self.mMinWidth = 250
-        self.mMinHeight = 100
+        self.mMinWidth = 190
+        self.mMinHeight = 82
         self.mNodeSize = QSize(self.mMinWidth, self.mMinHeight)
         self.mNodeNameTextWidth = 0
         self.mNodeNameTextHeight = 0

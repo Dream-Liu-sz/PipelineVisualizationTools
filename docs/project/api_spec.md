@@ -126,7 +126,8 @@ The application also supports JSON format pipeline configurations:
 | `getPortLink()` | - | dict[PortDes, list[PortDes]] | Get port linkage map |
 | `buildNode()` | - | void | Assign ports to nodes, identify source nodes |
 | `createLevel()` | - | void | Assign hierarchy levels to nodes |
-| `createNodePos()` | QPoint, int | void | Calculate node positions |
+| `createNodePos()` | QPoint, int | void | Delegate layout computation to LayoutEngine |
+| `matchNodePort()` | NodeDes, PortDes | bool | Match node to port by NodeId+NodeInstanceId |
 | `getPipelineName()` | - | string | Get pipeline name |
 | `isBuild()` | - | bool | Check if pipeline has been built |
 
@@ -143,7 +144,59 @@ The application also supports JSON format pipeline configurations:
 | `getInputPort()` | - | list[PortDes] | Get input ports |
 | `getOutputPort()` | - | list[PortDes] | Get output ports |
 | `getLink()` | - | dict | Get node link map |
+| `sortOutputPort()` | - | void | Reorder output ports by mChildNodeToOutputPortMap |
+| `calOutputPortPosNew()` | QFont | void | Calculate output port positions |
+| `calInputPortPos()` | QFont | void | Calculate input port positions |
 | `match()` | NodeDes | bool | Check if two nodes are the same |
+
+### LayoutEngine Contract
+
+| Method | Input | Output | Description |
+|--------|-------|--------|-------------|
+| `compute_layout()` | QPoint center_pos, int font_size | void | Execute full layout pipeline (graph build → layers → crossings → positions → ports) |
+| `build_graph()` | - | void | Build networkx DiGraph from pipeline data using matchNodePort |
+| `assign_layers()` | - | void | Assign layers via topological sort (longest path), BFS fallback for cycles |
+| `minimize_crossings()` | int iterations=24 | void | Barycenter heuristic with alternating up/down sweeps |
+| `position_nodes()` | QPoint center_pos | void | Layer-by-layer left-to-right positioning with vertical centering |
+| `order_ports()` | - | void | Barycenter-based output/input port ordering |
+
+#### LayoutEngine Attributes
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `mPipeline` | PipelineDes | Reference to pipeline being laid out |
+| `mGraph` | nx.DiGraph | NetworkX directed graph |
+| `mLayers` | dict[str, int] | Node ID to layer number mapping |
+| `mLayerList` | list[list[str]] | Nodes organized by layer |
+| `mNodeOrder` | dict[str, int] | Node ID to position within layer |
+| `mFont` | QFont | Font for port size calculation |
+
+#### LayoutEngine Constants
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `LAYER_SPACING` | 250 | Horizontal spacing between layers |
+| `NODE_SPACING` | 50 | Vertical spacing between nodes in same layer |
+| `MIN_NODE_WIDTH` | 250 | Minimum node width |
+| `MIN_NODE_HEIGHT` | 100 | Minimum node height |
+
+### BezierLineRenderer Contract
+
+All methods are static.
+
+| Method | Input | Output | Description |
+|--------|-------|--------|-------------|
+| `draw_bezier_link()` | QPainter, PortDes src, PortDes dst, QPen, int radius=5 | void | Draw complete Bezier connection between two ports |
+| `create_bezier_path()` | QPoint start, QPoint end | QPainterPath | Create cubic Bezier path with horizontal control points |
+| `draw_port_dot()` | QPainter, QPoint, QColor, int radius=5 | void | Draw filled circle at port endpoint |
+
+#### Bezier Curve Parameters
+
+| Parameter | Formula | Description |
+|-----------|---------|-------------|
+| Control point offset | `max(50, abs(dx) * 0.4)` | Horizontal distance of control points from endpoints |
+| Control point 1 | `(start.x + offset, start.y)` | Extends rightward from source |
+| Control point 2 | `(end.x - offset, end.y)` | Extends leftward from destination |
 
 ### UseCaseDes Contract
 
@@ -160,4 +213,4 @@ The application also supports JSON format pipeline configurations:
 - Update when new internal interfaces are added
 - Document breaking changes with version notes
 
-<!-- Metadata: Generated 2026-05-19 | Version 1.0.0 -->
+<!-- Metadata: Generated 2026-05-19 | Version 2.0.0 -->

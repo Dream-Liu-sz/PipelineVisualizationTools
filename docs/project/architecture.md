@@ -31,52 +31,53 @@ The application follows a **Model-View-Controller (MVC)** inspired architecture 
 ### Component Diagram
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Presentation Layer                    │
-│  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐  │
-│  │  MainWindow  │  │ CanvasWidget │  │  NodePainter   │  │
-│  │  (Controller)│  │   (View)     │  │   (Renderer)   │  │
-│  └──────┬──────┘  └──────┬───────┘  └───────┬────────┘  │
-│         │                │                   │           │
-│  ┌──────┴──────┐  ┌──────┴───────┐  ┌───────┴────────┐  │
-│  │ TreeWidget  │  │ DrawLine     │  │ Link Painter   │  │
-│  │ (Navigation)│  │ (Connections)│  │ (Edges)        │  │
-│  └─────────────┘  └──────────────┘  └────────────────┘  │
-└─────────────────────────┬───────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                    Presentation Layer                         │
+│  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐      │
+│  │  MainWindow  │  │ CanvasWidget │  │  NodePainter   │      │
+│  │  (Controller)│  │   (View)     │  │   (Renderer)   │      │
+│  └──────┬──────┘  └──────┬───────┘  └───────┬────────┘      │
+│         │                │                   │               │
+│  ┌──────┴──────┐  ┌──────┴───────┐  ┌───────┴────────┐      │
+│  │ TreeWidget  │  │ BezierLine   │  │ Link Painter   │      │
+│  │ (Navigation)│  │ (Connections)│  │ (Edges)        │      │
+│  └─────────────┘  └──────────────┘  └────────────────┘      │
+└─────────────────────────┬────────────────────────────────────┘
                           │
-┌─────────────────────────┴───────────────────────────────┐
-│                     Business Logic Layer                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌────────────────┐  │
-│  │  UseCaseDes   │  │ PipelineDes  │  │   NodeDes      │  │
-│  │  (Parser)     │  │ (Layout)     │  │   (Model)      │  │
-│  └──────────────┘  └──────────────┘  └────────────────┘  │
-│  ┌──────────────┐  ┌──────────────┐                       │
-│  │  PortDes      │  │   Utils      │                       │
-│  │  (Model)      │  │  (Helpers)   │                       │
-│  └──────────────┘  └──────────────┘                       │
-└─────────────────────────┬───────────────────────────────┘
+┌─────────────────────────┴────────────────────────────────────┐
+│                     Business Logic Layer                      │
+│  ┌──────────────┐  ┌──────────────┐  ┌────────────────┐     │
+│  │  UseCaseDes   │  │ PipelineDes  │  │   NodeDes      │     │
+│  │  (Parser)     │  │ (Model)      │  │   (Model)      │     │
+│  └──────────────┘  └──────────────┘  └────────────────┘     │
+│  ┌──────────────┐  ┌──────────────┐  ┌────────────────┐     │
+│  │  PortDes      │  │LayoutEngine  │  │   Utils        │     │
+│  │  (Model)      │  │ (Layout)     │  │  (Helpers)     │     │
+│  └──────────────┘  └──────────────┘  └────────────────┘     │
+└─────────────────────────┬────────────────────────────────────┘
                           │
-┌─────────────────────────┴───────────────────────────────┐
-│                      Data Layer                          │
-│  ┌──────────────┐  ┌──────────────┐                     │
-│  │  XML Parser   │  │  JSON Parser │                     │
-│  │(ElementTree)  │  │  (json5)     │                     │
-│  └──────────────┘  └──────────────┘                     │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────┴────────────────────────────────────┐
+│                      Data Layer                               │
+│  ┌──────────────┐  ┌──────────────┐                          │
+│  │  XML Parser   │  │  JSON Parser │                          │
+│  │(ElementTree)  │  │  (json5)     │                          │
+│  └──────────────┘  └──────────────┘                          │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### Component Responsibilities
 
 | Component | File | Responsibility |
 |-----------|------|----------------|
-| **MainWindow** | `MainWindow.py` | Application window, menu bar, tree navigation, canvas management, event handling |
-| **CanvasWidget** | `CanvasWidget.py` | Drawing canvas, port-to-port connection rendering |
+| **MainWindow** | `MainWindow.py` | Application window, menu bar, tree navigation, canvas management, event handling, dynamic canvas sizing |
+| **CanvasWidget** | `CanvasWidget.py` | Drawing canvas, delegates port-to-port connection rendering to BezierLineRenderer |
 | **NodePainter** | `NodePainter.py` | Individual node rendering, property display, mouse interaction |
 | **UseCaseDes** | `UseCase.py` | XML/JSON file parsing, UseCase and Pipeline extraction |
-| **PipelineDes** | `Pipeline.py` | Pipeline data model, node layout algorithm, level assignment |
+| **PipelineDes** | `Pipeline.py` | Pipeline data model, level assignment, delegates layout to LayoutEngine |
+| **LayoutEngine** | `LayoutEngine.py` | Graph-based Sugiyama hierarchical layout, barycenter crossing minimization, port ordering |
+| **BezierLineRenderer** | `BezierLine.py` | Cubic Bezier curve rendering for port connections, port dot rendering |
 | **NodeDes** | `Node.py` | Node data model, port management, size calculation, position |
 | **PortDes** | `Port.py` | Port data model, port name/ID, position tracking |
-| **DrawLine** | `DrawLine.py` | Connection line drawing between ports |
 | **Link** | `Link.py` | Link data representation |
 | **Utils** | `Utils.py` | Logging utilities, message types, common helpers |
 | **Resource** | `resource.py` | Compiled Qt resources (icons, etc.) |
@@ -106,38 +107,44 @@ User Action          MainWindow         UseCaseDes        PipelineDes        Nod
 ### Pipeline Rendering Sequence
 
 ```
-User Double-Click    MainWindow         UseCaseDes        PipelineDes        Canvas/NodePainter
-    │                    │                   │                  │                  │
-    │── Double Click ──>│                   │                  │                  │
-    │                    │─ buildPipeline() ──────────────────>│                  │
-    │                    │                   │                  │─ buildNode()      │
-    │                    │                   │                  │─ createLevel()    │
-    │                    │                   │                  │─ createNodePos()  │
-    │                    │                   │<─────────────────│                  │
-    │                    │<──────────────────│                  │                  │
-    │                    │─ initCanvas() ──────────────────────────────────────────>│
-    │                    │                   │                  │                  │─ Render Nodes
-    │                    │                   │                  │                  │─ Draw Links
+User Double-Click    MainWindow     UseCaseDes    PipelineDes    LayoutEngine    Canvas/NodePainter
+    │                    │               │              │              │                │
+    │── Double Click ──>│               │              │              │                │
+    │                    │─ buildPipeline() ──────────>│              │                │
+    │                    │               │              │─ buildNode() │                │
+    │                    │               │              │─ createLevel()│               │
+    │                    │               │              │─ createNodePos()              │
+    │                    │               │              │              │<──compute_layout()
+    │                    │               │              │              │─ build_graph()
+    │                    │               │              │              │─ assign_layers()
+    │                    │               │              │              │─ minimize_crossings()
+    │                    │               │              │              │─ position_nodes()
+    │                    │               │              │              │─ order_ports()
+    │                    │               │              │<─────────────│                │
+    │                    │               │<─────────────│              │                │
+    │                    │<──────────────│              │              │                │
+    │                    │─ initCanvas() ─────────────────────────────────────────────>│
+    │                    │               │              │              │                │─ Render Nodes
+    │                    │               │              │              │                │─ Draw Bezier Links
 ```
 
 ## Node Layout Algorithm
 
-The application implements a **hierarchical graph layout** algorithm:
+The application implements a **Sugiyama-style hierarchical graph layout** algorithm powered by networkx:
 
 ### Algorithm Steps
 
-1. **Source Node Identification**: Find nodes with no input ports or marked as TARGET nodes
-2. **Level Assignment**: Assign levels to nodes based on topological distance from source nodes
-3. **Position Calculation**: 
-   - Source nodes placed at reference point
-   - Child nodes positioned relative to parent's output port positions
-4. **Overlap Resolution**: Adjust node positions to prevent overlaps within the same level
-5. **Port Positioning**: Calculate input/output port positions based on node size
+1. **Graph Construction**: Build a `networkx.DiGraph` from pipeline data, using `matchNodePort` for robust port-to-node mapping that handles name mismatches between ports and nodes
+2. **Layer Assignment**: Assign layers via topological sort (longest path), with BFS fallback for cyclic graphs
+3. **Crossing Minimization**: Barycenter heuristic with 24 alternating up/down sweeps to minimize edge crossings
+4. **Node Positioning**: Layer-by-layer left-to-right layout with vertical centering, automatic spacing (250px between layers, 50px between nodes)
+5. **Port Ordering**: Barycenter-based output/input port ordering to reduce intra-node connection crossings
+6. **Duplicate Node Handling**: Canonical node positions propagated to duplicate entries in the node list
 
 ### Layout Strategy
 
 ```
-Level 0 (Source)     Level 1            Level 2            Level 3
+Layer 0 (Source)     Layer 1            Layer 2            Layer 3
 ┌─────────┐         ┌─────────┐        ┌─────────┐        ┌─────────┐
 │ Sensor0 │────────>│ IFE0    │───────>│ IPE0    │───────>│ Sink0   │
 └─────────┘         └─────────┘        └─────────┘        └─────────┘
@@ -147,13 +154,36 @@ Level 0 (Source)     Level 1            Level 2            Level 3
                     └─────────┘
 ```
 
+### Connection Rendering
+
+Connections between ports are rendered as **cubic Bezier curves** using `QPainterPath.cubicTo()`:
+
+- Control points extend horizontally from source/end points
+- Offset = `max(50, horizontal_distance * 0.4)` ensures smooth curves for both short and long connections
+- Port endpoints rendered as filled circles via `drawEllipse()` (replacing the previous per-pixel trigonometric approach)
+
+### Edge Cases Handled
+
+| Case | Handling |
+|------|----------|
+| Empty pipeline | Early return, mark as built |
+| Single node | Place at center position |
+| Cyclic graph | BFS-based layering fallback |
+| Port name ≠ Node name | `matchNodePort` uses NodeId+NodeInstanceId matching |
+| Duplicate nodes in list | Canonical position propagation |
+| Orphan nodes (no connections) | Added to graph as isolated nodes |
+| Canvas overflow | Dynamic canvas resize based on max node extent |
+
 ## Key Design Decisions
 
 | Decision | Rationale | Impact |
 |----------|-----------|--------|
 | PyQt5 for GUI | Mature Python GUI framework with rich widget set | Desktop-only, Windows-focused |
 | XML + JSON support | Legacy XML format + modern NCF JSON format | Dual parsing logic in UseCaseDes |
-| Hierarchical layout | Pipeline topology is naturally directional | Clear visualization, minimizes crossings |
+| Sugiyama layout via networkx | Industry-standard algorithm for directed graph layout | Optimal crossing reduction, deterministic output |
+| Bezier curve connections | Smooth visual flow between nodes | Better readability than straight lines |
+| matchNodePort for graph building | Port names may differ from node names in JSON configs | Robust port-to-node mapping |
+| Dynamic canvas sizing | Large pipelines may exceed fixed 8000x8000 canvas | All nodes always visible |
 | Canvas-based rendering | Large pipelines need scrollable/pannable area | Custom drawing instead of standard widgets |
 
 ## Maintenance
@@ -162,4 +192,4 @@ Level 0 (Source)     Level 1            Level 2            Level 3
 - Update when architecture patterns change
 - Review when adding support for new file formats
 
-<!-- Metadata: Generated 2026-05-19 | Version 1.0.0 -->
+<!-- Metadata: Generated 2026-05-19 | Version 2.0.0 -->

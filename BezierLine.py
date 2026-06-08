@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QPoint, QPointF
+from PyQt5.QtCore import QPoint, QPointF, Qt
 from PyQt5.QtGui import QPainterPath, QPen, QColor
 
 
@@ -19,12 +19,20 @@ class BezierLineRenderer:
 
         path = BezierLineRenderer.create_bezier_path(start_point, end_point)
 
-        painter.setPen(pen)
+        link_pen = QPen(pen)
+        link_color = QColor(pen.color())
+        link_color.setAlpha(218)
+        link_pen.setColor(link_color)
+        link_pen.setWidth(max(2, pen.width()))
+        link_pen.setCapStyle(Qt.RoundCap)
+        link_pen.setJoinStyle(Qt.RoundJoin)
+
+        painter.setPen(link_pen)
         painter.setBrush(QColor(0, 0, 0, 0))
         painter.drawPath(path)
 
-        BezierLineRenderer.draw_port_dot(painter, start_point, pen.color(), radius)
-        BezierLineRenderer.draw_port_dot(painter, end_point, pen.color(), radius)
+        BezierLineRenderer.draw_endpoint_marker(painter, start_point, link_color, radius)
+        BezierLineRenderer.draw_endpoint_marker(painter, end_point, link_color, radius)
 
     @staticmethod
     def create_bezier_path(start_point, end_point):
@@ -41,7 +49,9 @@ class BezierLineRenderer:
         return path
 
     @staticmethod
-    def draw_port_dot(painter, point, color, radius=5):
-        painter.setPen(QPen(color))
-        painter.setBrush(color)
-        painter.drawEllipse(QPointF(point), radius, radius)
+    def draw_endpoint_marker(painter, point, color, radius=5):
+        marker_color = QColor(color)
+        marker_color.setAlpha(170)
+        painter.setPen(QPen(marker_color, 1))
+        painter.setBrush(QColor(0, 0, 0, 0))
+        painter.drawEllipse(QPointF(point), max(3, radius - 2), max(3, radius - 2))

@@ -6,10 +6,10 @@ import sys
 
 class LayoutEngine:
     TAG = "LayoutEngine"
-    LAYER_SPACING = 250
-    NODE_SPACING = 50
-    MIN_NODE_WIDTH = 250
-    MIN_NODE_HEIGHT = 100
+    LAYER_SPACING = 150
+    NODE_SPACING = 28
+    MIN_NODE_WIDTH = 190
+    MIN_NODE_HEIGHT = 82
 
     def __init__(self, pipeline):
         self.mPipeline = pipeline

@@ -102,6 +102,7 @@ class UseCaseDes(object):
         for pipeline in pipelineJsonDataList:
             pipelineDes = PipelineDes()
             pipelineDes.setPipelineName(str(pipeline["PipelineName"]))
+            pipelineDes.setPipelineKeys(pipeline.get("PipelineKeys", {}))
 
             Utils.LogI(self.TAG, ("pipeline %s:" % (pipelineDes.getPipelineName())))
             self.nodesTranslationJson(pipeline, pipelineDes)

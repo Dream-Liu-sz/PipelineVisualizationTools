@@ -5,170 +5,96 @@
 
 ## Overview
 
-This document describes the UI/UX design patterns, visual conventions, and interaction guidelines for the Pipeline Visualization Tools application.
+Pipeline Visualization Tools uses a professional dark engineering workspace optimized for long-running pipeline debugging. The UI should keep visual noise low, emphasize topology flow, and make node and property inspection feel immediate.
 
-## Visual Design System
+## Visual System
 
-### Color Palette
+| Usage | Hex | Purpose |
+|-------|-----|---------|
+| Background | `#0F172A` | Main window and canvas |
+| Panel | `#111827` | Navigation and empty-state surfaces |
+| Card | `#1F2937` | Nodes, toolbar pills, contextual controls |
+| Border | `#334155` | Separators and low-emphasis outlines |
+| Strong border | `#475569` | Node borders and hover structure |
+| Primary accent | `#38BDF8` | Focus states, selected states, active highlights |
+| Success accent | `#34D399` | Secondary node color and positive flow color |
+| Warning accent | `#F59E0B` | Attention state |
+| Text | `#E5EDF7` | Primary labels |
+| Muted text | `#94A3B8` | Metadata, hints, port labels |
 
-| Usage | RGB | Hex | Purpose |
-|-------|-----|-----|---------|
-| Background Dark | (50, 50, 50) | #323232 | Main window, tree panel, canvas background |
-| Text Light | (200, 200, 200) | #C8C8C8 | Tree item text, general labels |
-| Text White | (255, 255, 255) | #FFFFFF | Tooltip text, dialog text |
-| Tooltip Background | (50, 50, 50) | #323232 | Node property tooltip |
-| Window Background | (255, 255, 255) | #FFFFFF | Default window background (unused) |
+Node colors are selected from a color-blind-aware accent palette in `ui_theme.py`. Avoid large saturated fills; use node colors as accent stripes, ports, and link colors so dense graphs stay readable.
 
-### Node Colors
+## Typography
 
-Nodes are assigned colors from a predefined palette (20 colors) to visually distinguish different nodes in the pipeline:
+| Element | Font | Style |
+|---------|------|-------|
+| App chrome, menus, tree | `Microsoft YaHei UI` | 9-11pt regular |
+| Panel titles and current pipeline | `Microsoft YaHei UI` | 15-17px bold |
+| Node title | `Microsoft YaHei UI` | Bold, scaled with zoom |
+| Port labels and properties | `Cascadia Mono` | Compact technical text |
 
-| Index | RGB | Index | RGB |
-|-------|-----|-------|-----|
-| 0 | (252, 230, 202) | 10 | (0, 199, 104) |
-| 1 | (200, 0, 0) | 11 | (199, 97, 20) |
-| 2 | (255, 255, 0) | 12 | (153, 51, 250) |
-| 3 | (64, 224, 205) | 13 | (128, 42, 42) |
-| 4 | (255, 0, 255) | 14 | (255, 125, 64) |
-| 5 | (0, 255, 255) | 15 | (107, 142, 35) |
-| 6 | (255, 153, 18) | 16 | (85, 102, 0) |
-| 7 | (156, 102, 31) | 17 | (0, 0, 255) |
-| 8 | (202, 235, 216) | 18 | (250, 240, 230) |
-| 9 | (3, 168, 158) | 19 | (150, 100, 0) |
+Text should be left-aligned except for compact pills. Keep line height generous in tooltips and documentation-like content.
 
-Colors cycle through the list when more than 20 nodes are present.
+## Layout
 
-### Typography
+The main window is split into a navigation panel and a canvas workspace with `QSplitter`.
 
-| Element | Font | Size | Style |
-|---------|------|------|-------|
-| Node Label | System default | 24px (configurable) | Normal |
-| Tooltip | KaiTi (楷体) | 18px | Italic |
-| Tree Items | System default | Default | Normal |
-| Dialog Text | System default | Default | Normal |
-
-## Layout Conventions
-
-### Window Layout
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Menu Bar: [File]                    [Help]                 │
-├────────────┬────────────────────────────────────────────────┤
-│            │                                                │
-│  Tree      │              Canvas Area                       │
-│  Panel     │              (8000 x 8000 virtual)             │
-│  (200px)   │                                                │
-│            │              ┌───────────┐                     │
-│  UseCase1  │              │  Node1    │────┐                │
-│    Pipeline│              └───────────┘    │                │
-│    A       │                               ▼                │
-│    B       │                        ┌───────────┐           │
-│            │                        │  Node2    │           │
-│  UseCase2  │                        └───────────┘           │
-│    Pipeline│                                                │
-│    C       │              [Tooltip Label (floating)]        │
-│            │                                                │
-├────────────┴────────────────────────────────────────────────┤
-│  Status: 1280 x 720 (default window size)                  │
-└─────────────────────────────────────────────────────────────┘
+```text
+Menu bar
+┌───────────────────────┬──────────────────────────────────────────────┐
+│ Searchable tree panel │ Context bar: file, pipeline, metrics, action │
+│ UseCase/Pipeline nav  │ Canvas viewport with grid and graph           │
+└───────────────────────┴──────────────────────────────────────────────┘
+Status bar: interaction hints
 ```
 
-### Node Visual Design
+Guidelines:
 
-```
-┌──────────────────────────────────┐
-│                                  │  ← Input Ports (left side)
-│  ┌──────────────────────────┐    │     - Port names displayed
-│  │       NODE NAME          │    │     - Vertically distributed
-│  │                          │    │
-│  │                          │────┼── → Output Ports (right side)
-│  │                          │    │     - Port names displayed
-│  │                          │    │     - Vertically distributed
-│  └──────────────────────────┘    │
-│                                  │
-└──────────────────────────────────┘
-```
+- Navigation defaults to 280px wide and should remain usable down to 220px.
+- The canvas owns most horizontal space and should remain the dominant visual area.
+- The context bar summarizes state: current pipeline, loaded file(s), node count, link count, and zoom.
+- Empty states should tell users the next action instead of showing a blank panel.
 
-### Connection Lines
+## Canvas And Nodes
 
-- Drawn from source node output port to destination node input port
-- Color matches the source node's assigned color
-- Straight line connections (no curved routing)
+- Canvas background uses a subtle grid to support spatial orientation while panning large graphs.
+- Nodes render as rounded dark cards with an accent stripe, clear title, and muted port labels.
+- Links use antialiased Bezier curves, rounded caps, alpha, and endpoint dots.
+- Node hover and drag states increase border emphasis instead of changing layout.
+- Tooltip cards show the selected node and property fields with monospace text.
 
 ## Interaction Patterns
 
-### Mouse Interactions
+| Action | Behavior |
+|--------|----------|
+| `Ctrl+O` | Open XML file |
+| `Ctrl+Alt+O` | Open JSON files |
+| Tree filter input | Filter UseCase and Pipeline names |
+| Double-click pipeline | Build and render selected pipeline |
+| Drag canvas | Free pan |
+| Wheel | Vertical pan |
+| `Shift+Wheel` | Horizontal pan |
+| `Ctrl+Wheel` | Zoom whole topology |
+| Hover node | Show delayed property card |
+| Center View | Recenter canvas around the layout origin |
 
-| Action | Effect |
-|--------|--------|
-| Left-click + drag on canvas | Pan the canvas |
-| Scroll wheel | Vertical pan |
-| Scroll wheel + Shift | Horizontal pan |
-| Scroll wheel + Ctrl | Zoom (if implemented) |
-| Hover on node | Display tooltip with node properties (after 800ms delay) |
-| Double-click tree item | Render selected pipeline |
-| Resize window | Tree panel width stays fixed at 200px |
+## Responsiveness
 
-### Keyboard Shortcuts
+- Use Qt layouts for application chrome and splitter-managed panels.
+- Keep the custom canvas oversized so large graphs remain pannable.
+- On narrow windows, preserve pipeline title and zoom first; secondary metric labels may compress.
+- Enable High DPI scaling in the app entrypoint.
 
-| Shortcut | Action |
-|----------|--------|
-| Ctrl+O | Open XML file |
-| Ctrl+Alt+O | Open JSON file(s) |
+## Accessibility And Readability
 
-### Menu Structure
+- Maintain strong contrast between text and surface colors.
+- Do not use color alone to encode meaning; position, labels, and topology direction remain primary.
+- Keep hover and selected states visually distinct.
+- Avoid decorative effects that obscure link direction or port labels.
 
-| Menu | Item | Action |
-|------|------|--------|
-| File | open xml file | Open file dialog for XML |
-| File | open json file | Open file dialog for JSON |
-| Help | about | Show version and author info |
-| Help | tips | Show troubleshooting tips |
+## Related Documents
 
-## Responsive Behavior
+- `docs/project/ui_ux_redesign.md` records the design comparison and selected direction.
+- `docs/project/ui_prototypes.md` contains key Markdown wireframes.
 
-### Canvas Size
-
-- Virtual canvas: 8000 x 8000 pixels
-- Canvas positioned at center offset (1000, 2000)
-- Window resizes do not affect canvas size
-
-### Tree Panel
-
-- Fixed width: 200px minimum
-- Full height: window height - 15px
-- Auto-resizes column to fit content
-- Dark background (#323232)
-
-### Tooltip
-
-- Appears after 800ms hover delay
-- Displays near the hovered node
-- Shows all node properties with separators
-- Auto-hides when cursor moves away
-
-## Design Principles
-
-| Principle | Application |
-|-----------|-------------|
-| **Visual Hierarchy** | Source nodes on left, flowing to sink nodes on right |
-| **Color Coding** | Each node has a unique color for easy identification |
-| **Information Density** | Show essential info (node name, ports) by default; details on hover |
-| **Consistency** | Same color scheme across tree panel and canvas |
-| **Feedback** | Cursor changes during drag, tooltips on hover |
-
-## Accessibility Considerations
-
-- High contrast text (light text on dark background)
-- Readable font sizes (18px+ for tooltips, 24px for node labels)
-- Clear visual distinction between nodes (color + position)
-- Keyboard shortcuts for primary actions
-
-## Maintenance
-
-- Update when UI components are redesigned
-- Update when new interaction patterns are added
-- Review for consistency with actual implementation
-
-<!-- Metadata: Generated 2026-05-19 | Version 1.0.0 -->
+<!-- Metadata: Updated 2026-05-19 | Version 3.0.0 -->

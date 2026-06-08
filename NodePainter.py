@@ -1,15 +1,17 @@
 from PyQt5.QtCore import Qt, pyqtSignal, QRect, QPoint, QSize, QEvent
-from PyQt5.QtGui import QPalette, QPen, QBrush, QFont, QPainter, QCursor
+from PyQt5.QtGui import QPalette, QPen, QBrush, QFont, QPainter, QCursor, QColor
 from PyQt5.QtWidgets import QFrame
 
 from Utils import Utils
 from Utils import ComMsg
 from Utils import MsgType
+from ui_theme import COLORS, font
 
 class NodePainter(QFrame):
     TAG = "NodePainter"
 
     signal = pyqtSignal(ComMsg)
+    nodeClicked = pyqtSignal(object)
     def __init__(self, parent, node, fontSize, jsonOpened):
         super(NodePainter ,self).__init__(parent)
         Utils.LogD(self.TAG, "__init__ +")
@@ -30,18 +32,23 @@ class NodePainter(QFrame):
         self.mNodeFont = QFont()
         self.mEnlargeSum = 0
         self.mScale = float(self.mSize.height()) / float(self.mSize.width())
-        self.mMinWidth = 200
+        self.mMinWidth = 90
         self.mMinHeight = self.mMinWidth * self.mScale
         self.setMinimumSize(self.mMinWidth, self.mMinHeight)
-        # self.setAttribute(Qt.WidgetAttribute.WA_Hover);
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAutoFillBackground(False)
+        self.setMouseTracking(True)
         self.installEventFilter(parent)
         # Utils.LogD(self.TAG, ("__init__ - minW %d minH %d" % (self.mMinWidth, self.mMinHeight)))
-        self.setStyleSheet("border-left: 1px solid white;")
-        self.setFrameShadow(QFrame.Raised)
-        self.setFrameShape(QFrame.Panel)
+        self.setStyleSheet("background: transparent;")
+        self.setFrameShadow(QFrame.Plain)
+        self.setFrameShape(QFrame.NoFrame)
         self.mKeyCtrlStatus = False
         self.mHoverMoveStatus = False
         self.mPressed = False
+        self.mHovered = False
+        self.mSelected = False
         self.mJsonOpend = jsonOpened
 
     def connectParentSlot(self, slot):
@@ -73,34 +80,59 @@ class NodePainter(QFrame):
 
     def paintEvent(self, QPaintEvent):
         p = QPainter(self)
-        p.setPen(self.pen)
-        p.setBrush(self.brush)
-        p.setBrush(self.mColor)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        p.setRenderHint(QPainter.TextAntialiasing, True)
 
-        self.mNodeFont.setPixelSize(self.mFontSize)
+        accent = QColor(self.mColor)
+        card = QRect(4, 4, self.geometry().width() - 9, self.geometry().height() - 9)
+        shadow = QRect(7, 9, self.geometry().width() - 10, self.geometry().height() - 10)
+        border_color = QColor(accent if self.mHovered or self.mPressed or self.mSelected else accent.darker(115))
+
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(0, 0, 0, 125))
+        p.drawRoundedRect(shadow, 10, 10)
+
+        p.setBrush(QColor(COLORS["card"]))
+        p.setPen(QPen(border_color, 3 if self.mSelected else (2 if self.mHovered or self.mPressed else 1)))
+        p.drawRoundedRect(card, 10, 10)
+
+        header = QRect(card.left() + 14, card.top() + 9, card.width() - 28, 30)
+        p.setPen(QColor(COLORS["text"]))
+        self.mNodeFont = font(max(9, int(self.mFontSize * 0.58)), bold=True)
         p.setFont(self.mNodeFont)
+        node_title = self.mNode.getNodeName() + "_" + str(self.mNode.getNodeInstanceId())
+        p.drawText(header, Qt.AlignLeft | Qt.AlignVCenter, node_title)
 
-        rect = QRect(0, 0, self.geometry().width(), self.geometry().height())
-        p.drawRect(rect)
-        p.drawText(rect, Qt.AlignCenter, (self.mNode.getNodeName() + "_" + str(self.mNode.getNodeInstanceId())))
-
-        self.mNodeFont.setPixelSize(self.mFontSize - 6)
+        self.mNodeFont = font(max(8, int(self.mFontSize * 0.44)), mono=True)
         p.setFont(self.mNodeFont)
+        p.setPen(QColor(COLORS["text_muted"]))
 
         self.mNode.calPortPos()
         for port in self.mNode.getInputPort():
             portName = port.getPortNamePrune() if port.getPortNamePrune() is not None else port.getPortName()
+            label = portName if self.mJsonOpend else portName + "_" + port.getPortId()
+            port_center = port.getPortPos()
+            p.setBrush(QColor(COLORS["card"]))
+            p.setPen(QPen(QColor(COLORS["text_muted"]), 1))
+            p.drawEllipse(QRect(port_center.x() - 4, port_center.y() - 4, 8, 8))
+            p.setPen(QColor(COLORS["text_muted"]))
             if self.mJsonOpend:
-                p.drawText(port.getPortPos(), portName)
+                p.drawText(port.getPortPos() + QPoint(10, 4), label)
             else:
-                p.drawText(port.getPortPos(), portName + "_" + port.getPortId())
+                p.drawText(port.getPortPos() + QPoint(10, 4), label)
 
         for port in self.mNode.getOutputPort():
             portName = port.getPortNamePrune() if port.getPortNamePrune() is not None else port.getPortName()
+            label = portName if self.mJsonOpend else portName + "_" + port.getPortId()
+            port_center = port.getPortPos() + QPoint(max(0, port.getWidth()), 0)
+            p.setBrush(QColor(COLORS["card"]))
+            p.setPen(QPen(accent, 2))
+            p.drawEllipse(QRect(port_center.x() - 4, port_center.y() - 4, 8, 8))
+            p.setPen(QColor(COLORS["text_muted"]))
             if self.mJsonOpend:
-                p.drawText(port.getPortPos(), portName)
+                p.drawText(port.getPortPos() - QPoint(8, -4), label)
             else:
-                p.drawText(port.getPortPos() - QPoint(17, 0), portName + "_" + port.getPortId())
+                p.drawText(port.getPortPos() - QPoint(18, -4), label)
         # if self.shape == "Line":
         #     p.drawLine(rect.topLeft(), rect.bottomRight())
         # elif self.shape == "Rectangle":
@@ -142,6 +174,10 @@ class NodePainter(QFrame):
     def getNodePos(self):
         return self.mNode.getNodePos()
 
+    def setSelected(self, selected):
+        self.mSelected = selected
+        self.update()
+
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton and self.mHoverMoveStatus is False:
             self.mPressed = True
@@ -150,6 +186,8 @@ class NodePainter(QFrame):
             self.setCursor(QCursor(Qt.OpenHandCursor))
             msg = ComMsg(MsgType.LeftButton, True)
             self.signal.emit(msg)
+            self.nodeClicked.emit(self.mNode)
+            self.update()
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton and self.mHoverMoveStatus is False:
@@ -158,6 +196,7 @@ class NodePainter(QFrame):
             event.accept()
             msg = ComMsg(MsgType.LeftButton, False)
             self.signal.emit(msg)
+            self.update()
 
     def mouseMoveEvent(self, event):
         if Qt.LeftButton and self.mPressed:
@@ -211,6 +250,16 @@ class NodePainter(QFrame):
         if event.type() == QEvent.HoverMove:
             return True
         return False
+
+    def enterEvent(self, event):
+        self.mHovered = True
+        self.update()
+        super(NodePainter, self).enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.mHovered = False
+        self.update()
+        super(NodePainter, self).leaveEvent(event)
 
     # def keyPressEvent(self, keyEvent):
     #     pass

@@ -26,6 +26,7 @@ class PipelineDes(object):
         self.mInputPortList = []
         self.mBuild = False
         self.mParentWidget = None
+        self.mPipelineKeys = {}
 
     def updateNodeToSrcPortMap(self, nodeId, port):
         portList = self.mNodeSrcPortDes.get(nodeId)
@@ -101,6 +102,15 @@ class PipelineDes(object):
 
     def getPipelineName(self):
         return self.mPipelineName
+
+    def setPipelineKeys(self, keys):
+        self.mPipelineKeys = keys if keys is not None else {}
+
+    def getPipelineKeys(self):
+        return self.mPipelineKeys
+
+    def getSrcNodeNameList(self):
+        return self.mSrcNodeNameList
 
     def setParentWidget(self, parent):
         self.mParentWidget = parent
