@@ -1,7 +1,7 @@
 from PyQt5.Qt import QPoint, QSize
 from PyQt5.Qt import QMessageBox
 from PyQt5.Qt import QMainWindow
-from PyQt5.QtCore import Qt, QEvent, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QEvent, QSettings, QTimer, pyqtSignal
 from PyQt5.Qt import QPalette
 from PyQt5.Qt import QIcon
 from PyQt5.Qt import QAction
@@ -18,6 +18,7 @@ from UseCase import UseCaseDes
 from ui_theme import COLORS, app_stylesheet, font, node_color, tooltip_stylesheet
 import sys
 import ctypes
+import os
 
 import resource
 # import time
@@ -29,6 +30,9 @@ class MainWindow(QMainWindow):
     CANVAS_MAJOR_GRID = 160
     EXPLORER_MIN_WIDTH = 220
     INSPECTOR_DEFAULT_WIDTH = 294
+    LAST_OPEN_DIR_KEY = "fileDialog/lastOpenDir"
+    DEFAULT_XML_DIR = r"D:\workspace\tools\PipelineTools"
+    DEFAULT_JSON_DIR = r"Y:\workspace\code\aero_vendor_do\vendor\noth\hardware\camera\src\extened\config\aero\pipelinedescription"
     mSignal = pyqtSignal(ComMsg)
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
@@ -74,6 +78,7 @@ class MainWindow(QMainWindow):
         self.mBaseLayout = {}
         self.mPipelineBaseLayoutMap = {}
         self.mPipelineCurrentLayoutMap = {}
+        self.mSettings = QSettings("PipelineVisualizationTools", "PipelineVisualizationTools")
         self.mExplorerVisible = True
         self.mLastExplorerWidth = self.mImageBrowserWidth
         self.initUI()
@@ -105,7 +110,18 @@ class MainWindow(QMainWindow):
         self.initImageWindow()
         self.initLable()
         self.initTimer()
+        self.enableFileDropTargets()
         self.updateCanvasContext()
+
+    def enableFileDropTargets(self):
+        for widget in (self, getattr(self, "mRootWidget", None), getattr(self, "mLeftPanel", None),
+                       getattr(self, "mRightPanel", None), getattr(self, "mCanvasViewport", None),
+                       getattr(self, "imageBrowser", None), getattr(self, "imageWindow", None),
+                       getattr(self, "mCanvas", None)):
+            if widget is not None:
+                widget.setAcceptDrops(True)
+                if widget is not self:
+                    widget.installEventFilter(self)
 
     def initWorkspace(self):
         self.mRootWidget = QWidget(self)
@@ -209,7 +225,7 @@ class MainWindow(QMainWindow):
         self.mSplitter.setSizes([self.mImageBrowserWidth, 1060])
         self.mSplitter.splitterMoved.connect(self.onSplitterMoved)
 
-        self.mStatusText = QLabel("Drag canvas to pan | Right-click background: pipeline info | Wheel: vertical | Shift+Wheel: horizontal | Ctrl+Wheel: zoom")
+        self.mStatusText = QLabel("Drop XML/JSON to open | Drag canvas to pan | Right-click background: pipeline info | Wheel: vertical | Shift+Wheel: horizontal | Ctrl+Wheel: zoom")
         self.statusBar().addPermanentWidget(self.mStatusText, 1)
 
     def initInspectorDrawer(self):
@@ -332,8 +348,8 @@ class MainWindow(QMainWindow):
         #                                               "选取文件夹",
         #                                               "./")  # 起始路径
         # rootdir = r"C:\Users\lx\Documents"
-        rootdir = r"D:\workspace\tools\PipelineTools"
-        self.mFileName, self.mFiletype = QFileDialog.getOpenFileName(self,
+        rootdir = self.getLastOpenDir(self.DEFAULT_XML_DIR)
+        fileName, self.mFiletype = QFileDialog.getOpenFileName(self,
                                                           "Open XML pipeline file",
                                                           rootdir,
                                                           "Xml Files (*.xml);;All Files (*)")
@@ -347,17 +363,14 @@ class MainWindow(QMainWindow):
         #                                              "文件保存",
         #                                              "./",
         #                                              "All Files (*);;Text Files (*.txt)")
-        if len(self.mFileName) > 0 and str(self.mFileName).find("xml") > 0:
-            self.imageBrowser.clear()
-            self.mCurrentFileSummary = self.mFileName
-            self.initUseCase()
+        self.loadPipelineFiles(fileName)
 
     def triggerOpenFiles(self, q):
         # directory1 = QFileDialog.getExistingDirectory(self,
         #                                               "选取文件夹",
         #                                               "./")  # 起始路径
         # rootdir = r"C:\Users\lx\Documents"
-        rootdir = r"Y:\workspace\code\aero_vendor_do\vendor\noth\hardware\camera\src\extened\config\aero\pipelinedescription"
+        rootdir = self.getLastOpenDir(self.DEFAULT_JSON_DIR)
         # folder_path = QFileDialog.getExistingDirectory(self, "选择文件夹", rootdir)
 
         # self.mFileName, self.mFiletype = QFileDialog.getOpenFileName(self,
@@ -365,7 +378,7 @@ class MainWindow(QMainWindow):
         #                                                   rootdir,
         #                                                   "Xml Files (*.xml);;All Files (*)")
 
-        self.mFileName, self.mFiletype = QFileDialog.getOpenFileNames(self,
+        fileNames, self.mFiletype = QFileDialog.getOpenFileNames(self,
                                                                       "Open JSON pipeline files",
                                                                       rootdir,
                                                                       "Json Files (*.json);;All Files (*)")
@@ -374,12 +387,107 @@ class MainWindow(QMainWindow):
         #                                              "文件保存",
         #                                              "./",
         #                                              "All Files (*);;Text Files (*.txt)")
-        if len(self.mFileName) > 0 and str(self.mFileName).find("json") > 0:
+        self.loadPipelineFiles(fileNames)
+
+    def getLastOpenDir(self, fallbackDir):
+        lastDir = self.mSettings.value(self.LAST_OPEN_DIR_KEY, "", type=str)
+        if lastDir and os.path.isdir(lastDir):
+            return lastDir
+        if fallbackDir and os.path.isdir(fallbackDir):
+            return fallbackDir
+        return os.path.dirname(os.path.abspath(__file__))
+
+    def rememberOpenPath(self, paths):
+        if isinstance(paths, (list, tuple)):
+            if len(paths) == 0:
+                return
+            path = paths[0]
+        else:
+            path = paths
+        if not path:
+            return
+        directory = path if os.path.isdir(path) else os.path.dirname(path)
+        if directory:
+            self.mSettings.setValue(self.LAST_OPEN_DIR_KEY, directory)
+
+    def loadPipelineFiles(self, paths):
+        if isinstance(paths, str):
+            paths = [paths] if paths else []
+        paths = [path for path in paths if path]
+        if len(paths) == 0:
+            return False
+
+        xmlFiles = [path for path in paths if path.lower().endswith(".xml")]
+        jsonFiles = [path for path in paths if path.lower().endswith(".json")]
+        if len(xmlFiles) == 1 and len(jsonFiles) == 0 and len(paths) == 1:
             self.imageBrowser.clear()
+            self.clearLoadedPipeline()
+            self.mFileName = xmlFiles[0]
+            self.mCurrentFileSummary = self.mFileName
+            self.mJsonOpend = False
+            self.rememberOpenPath(self.mFileName)
+            self.initUseCase()
+            return True
+        if len(jsonFiles) > 0 and len(xmlFiles) == 0 and len(jsonFiles) == len(paths):
+            self.imageBrowser.clear()
+            self.clearLoadedPipeline()
+            self.mFileName = jsonFiles
             print(self.mFileName)
             self.mCurrentFileSummary = "%d JSON files loaded" % len(self.mFileName)
-            self.initAllJsonPipeline()
             self.mJsonOpend = True
+            self.rememberOpenPath(self.mFileName)
+            self.initAllJsonPipeline()
+            return True
+
+        self.showStyledMessage("Unsupported file",
+                               "Please open one XML pipeline file, or one or more JSON pipeline files.")
+        return False
+
+    def droppedPipelineFiles(self, event):
+        if not event.mimeData().hasUrls():
+            return []
+        files = []
+        for url in event.mimeData().urls():
+            if not url.isLocalFile():
+                continue
+            path = url.toLocalFile()
+            if os.path.isfile(path) and path.lower().endswith((".xml", ".json")):
+                files.append(path)
+        return files
+
+    def dragEnterEvent(self, event):
+        if self.droppedPipelineFiles(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        if self.droppedPipelineFiles(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        if self.loadPipelineFiles(self.droppedPipelineFiles(event)):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def clearLoadedPipeline(self):
+        self.clearWork()
+        self.mSelectPipeline = None
+        self.mCurrentPipelineName = ""
+        self.mPipelineBaseLayoutMap.clear()
+        self.mPipelineCurrentLayoutMap.clear()
+        self.mBaseLayout.clear()
+        self.mSelectedNode = None
+        self.mSelectedLink = None
+        if hasattr(self, "mCanvas"):
+            self.mCanvas.mNodeMapPainter.clear()
+            self.mCanvas.initPainterInstance([])
+            self.mCanvas.setPortLinkDes({})
+            self.mCanvas.setSelectedLink(None, None)
+            self.mCanvas.update()
 
     def processHelp(self):
         version = "V3.0"
@@ -1276,6 +1384,18 @@ class MainWindow(QMainWindow):
         # Utils.LogI(self.TAG, ("run time...", time.time()))
 
     def eventFilter(self, object, event):
+        if event.type() in (QEvent.DragEnter, QEvent.DragMove):
+            if self.droppedPipelineFiles(event):
+                event.acceptProposedAction()
+                return True
+
+        if event.type() == QEvent.Drop:
+            files = self.droppedPipelineFiles(event)
+            if files:
+                self.loadPipelineFiles(files)
+                event.acceptProposedAction()
+                return True
+
         '''
             @Func:处理QEvent.HoverMove事件，鼠标指针处于树形结构的选择框附件时，变为左右箭头
         '''
