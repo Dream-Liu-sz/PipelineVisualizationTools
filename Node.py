@@ -62,6 +62,15 @@ class NodeDes(object):
     def getTargetName(self):
         return self.mTargetName
 
+    def mergeTargetName(self, targetName):
+        if targetName is None or len(str(targetName)) == 0:
+            return
+        targetName = str(targetName)
+        if self.mTargetName is None or len(str(self.mTargetName)) == 0:
+            self.mTargetName = targetName
+        elif self.mTargetName.find(targetName) < 0:
+            self.mTargetName = str(self.mTargetName) + "|" + targetName
+
     def setTargetNode(self, b):
         self.mTargetNode = b
 
@@ -102,7 +111,7 @@ class NodeDes(object):
                 result = True
 
             if self.mTargetNode or port.isTargetPort():
-                if self.mTargetName.find(port.getPortName()) < 0:
+                if self.mTargetName.find(port.getPortName()) < 0 and port.getPortName().find(self.mTargetName) < 0:
                     result = False
 
         return result
@@ -110,11 +119,13 @@ class NodeDes(object):
     def match(self, node):
         result = False
         if type(node) == NodeDes:
-            if self.mNodeId == node.getNodeId() and self.mNodeInstanceId == node.getNodeInstanceId():
+            if self.mNodeName == node.getNodeName() and self.mNodeId == node.getNodeId() and self.mNodeInstanceId == node.getNodeInstanceId():
                 result = True
-            if self.mTargetNode or node.isTargetNode():
-                if self.mTargetName.find(node.getTargetName()) < 0:
-                    result = False
+            elif self.mNodeId == node.getNodeId() and self.mNodeInstanceId == node.getNodeInstanceId():
+                result = True
+            if result and (self.mTargetNode or node.isTargetNode()):
+                if self.mTargetName.find(node.getTargetName()) < 0 and node.getTargetName().find(self.mTargetName) < 0:
+                    result = self.mNodeName == node.getNodeName()
                 # Utils.LogI("    ", ("this %s_%s_%s_%s --> input %s_%s_%s" %
                 #                     (str(self.mNodeName),
                 #                      str(self.mNodeId),

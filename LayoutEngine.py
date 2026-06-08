@@ -306,11 +306,22 @@ class LayoutEngine:
 
     def order_ports(self):
         Utils.LogD(self.TAG, ("%s: +" % (sys._getframe().f_code.co_name)))
+        for _ in range(3):
+            for node_id in self.mGraph.nodes():
+                node = self.mGraph.nodes[node_id]['node']
+                self._order_output_ports(node)
+            self._recalculate_port_positions()
+
+            for node_id in self.mGraph.nodes():
+                node = self.mGraph.nodes[node_id]['node']
+                self._order_input_ports(node)
+            self._recalculate_port_positions()
+        Utils.LogD(self.TAG, ("%s: -" % (sys._getframe().f_code.co_name)))
+
+    def _recalculate_port_positions(self):
         for node_id in self.mGraph.nodes():
             node = self.mGraph.nodes[node_id]['node']
-            self._order_output_ports(node)
-            self._order_input_ports(node)
-        Utils.LogD(self.TAG, ("%s: -" % (sys._getframe().f_code.co_name)))
+            node.calPortPos()
 
     def _order_output_ports(self, node):
         output_ports = node.getOutputPort()

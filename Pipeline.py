@@ -85,6 +85,9 @@ class PipelineDes(object):
     def addNode(self, inputNode):
         for node in self.mNodeList:
             if node.match(inputNode):
+                node.mergeTargetName(inputNode.getTargetName())
+                if inputNode.isTargetNode():
+                    node.setTargetNode(True)
                 return
         self.mNodeList.append(inputNode)
 
