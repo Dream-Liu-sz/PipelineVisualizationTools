@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt, QEvent, QTimer, pyqtSignal
 from PyQt5.Qt import QPalette
 from PyQt5.Qt import QIcon
 from PyQt5.Qt import QAction
-from PyQt5.QtGui import QColor, QCursor, QFont, QFontMetrics, QPalette
+from PyQt5.QtGui import QColor, QCursor, QFont, QFontMetrics, QPalette, QPixmap, QPainter, QIcon, QPen
 from PyQt5.QtWidgets import QTreeWidget, QAbstractItemView, QHeaderView, QFrame, QTreeWidgetItem, QWidget, QFileDialog, \
     QLabel, QSplitter, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QSizePolicy
 
@@ -72,6 +72,8 @@ class MainWindow(QMainWindow):
         self.mBaseLayout = {}
         self.mPipelineBaseLayoutMap = {}
         self.mPipelineCurrentLayoutMap = {}
+        self.mExplorerVisible = True
+        self.mLastExplorerWidth = self.mImageBrowserWidth
         self.initUI()
 
     def applyNativeDarkTitleBar(self):
@@ -196,6 +198,8 @@ class MainWindow(QMainWindow):
 
         self.mSplitter.addWidget(self.mLeftPanel)
         self.mSplitter.addWidget(self.mRightPanel)
+        self.mSplitter.setCollapsible(0, True)
+        self.mSplitter.setCollapsible(1, False)
         self.mSplitter.setSizes([self.mImageBrowserWidth, 1060])
         self.mSplitter.splitterMoved.connect(self.onSplitterMoved)
 
@@ -275,6 +279,15 @@ class MainWindow(QMainWindow):
         openDirImageFolderAct.triggered.connect(self.triggerOpenFiles)
 
         menubar = self.menuBar()
+        self.mMenuBar = menubar
+        menubar.installEventFilter(self)
+        self.mExplorerToggleAction = QAction(self.createSidebarToggleIcon(True), "", self)
+        self.mExplorerToggleAction.setCheckable(True)
+        self.mExplorerToggleAction.setChecked(True)
+        self.mExplorerToggleAction.setToolTip("Show or hide pipeline explorer")
+        self.mExplorerToggleAction.triggered.connect(self.toggleExplorer)
+        menubar.addAction(self.mExplorerToggleAction)
+
         fileMenu = menubar.addMenu('File')
         fileMenu.addAction(openImageFolderAct)
         fileMenu.addAction(openDirImageFolderAct)
@@ -293,6 +306,20 @@ class MainWindow(QMainWindow):
         helpMenu.addAction(tipsAct)
 
         Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
+
+    def createSidebarToggleIcon(self, checked):
+        pixmap = QPixmap(16, 16)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        stroke = QColor("#B8B8B8" if checked else "#8A8A8A")
+        fill = QColor(255, 255, 255, 0)
+        painter.setPen(QPen(stroke, 1.4))
+        painter.setBrush(fill)
+        painter.drawRoundedRect(3, 3, 10, 10, 2, 2)
+        painter.drawLine(6, 4, 6, 12)
+        painter.end()
+        return QIcon(pixmap)
 
     def triggerOpenFile(self, q):
         # directory1 = QFileDialog.getExistingDirectory(self,
@@ -726,7 +753,28 @@ class MainWindow(QMainWindow):
 
     def onSplitterMoved(self, pos, index):
         self.mImageBrowserWidth = self.mLeftPanel.width()
+        if self.mLeftPanel.width() > 0:
+            self.mLastExplorerWidth = self.mLeftPanel.width()
+            self.mExplorerVisible = True
+            self.mExplorerToggleAction.setChecked(True)
+            self.mExplorerToggleAction.setIcon(self.createSidebarToggleIcon(True))
         self.updateCanvasViewportSize()
+
+    def toggleExplorer(self):
+        self.mExplorerVisible = self.mExplorerToggleAction.isChecked()
+        self.mExplorerToggleAction.setIcon(self.createSidebarToggleIcon(self.mExplorerVisible))
+        if self.mExplorerVisible:
+            width = max(220, self.mLastExplorerWidth)
+            total = max(self.mSplitter.width(), width + 600)
+            self.mLeftPanel.show()
+            self.mSplitter.setSizes([width, max(600, total - width)])
+        else:
+            if self.mLeftPanel.width() > 0:
+                self.mLastExplorerWidth = self.mLeftPanel.width()
+            self.mLeftPanel.hide()
+            self.mSplitter.setSizes([0, max(600, self.mSplitter.width())])
+        self.updateCanvasViewportSize()
+        self.centerCanvas()
 
     def updateCanvasViewportSize(self):
         if hasattr(self, "imageWindow"):
@@ -957,7 +1005,7 @@ class MainWindow(QMainWindow):
     def addLinkTree(self, parent, src_port, dst_port, title=None):
         src_node = self.findNodeForPort(src_port)
         dst_node = self.findNodeForPort(dst_port)
-        link_item = self.addTreeItem(parent, title or "%s -> %s" % (self.formatNodeName(src_node), self.formatNodeName(dst_node)), "")
+        link_item = self.addTreeItem(parent, title or "Link", "")
         self.addTreeItem(link_item, "SourceNode", self.formatNodeName(src_node))
         self.addPortTree(link_item, src_port, "OutputPort")
         self.addTreeItem(link_item, "TargetNode", self.formatNodeName(dst_node))
@@ -1033,13 +1081,22 @@ class MainWindow(QMainWindow):
         self.setInspectorTree("Link Details",
                               "%s -> %s" % (self.formatNodeName(src_node), self.formatNodeName(dst_node)))
         root = self.addLinkTree(None, src_port, dst_port)
-        self.mInspectorBody.collapseAll()
-        root.setExpanded(True)
+        self.mInspectorBody.expandAll()
 
     def isCanvasSurface(self, obj):
         return obj in (getattr(self, "mCanvasViewport", None),
                        getattr(self, "imageWindow", None),
                        getattr(self, "mCanvas", None))
+
+    def isMenuPopupOpen(self):
+        menubar = getattr(self, "mMenuBar", None)
+        if menubar is None:
+            return False
+        for action in menubar.actions():
+            menu = action.menu()
+            if menu is not None and menu.isVisible():
+                return True
+        return False
 
     def isSelectNode(self, node, currentPos):
         nodePos = node.getNodePos()
@@ -1204,6 +1261,10 @@ class MainWindow(QMainWindow):
         '''
             @Func:处理QEvent.HoverMove事件，鼠标指针处于树形结构的选择框附件时，变为左右箭头
         '''
+        menubar = getattr(self, "mMenuBar", None)
+        if object is menubar and event.type() in (QEvent.MouseMove, QEvent.HoverMove) and self.isMenuPopupOpen():
+            return True
+
         if event.type() in (QEvent.HoverMove, QEvent.MouseMove):
             if hasattr(event, "globalPos"):
                 pos = self.mapFromGlobal(event.globalPos())
