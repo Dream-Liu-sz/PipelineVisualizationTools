@@ -89,11 +89,11 @@ class NodePainter(QFrame):
         self.mNode.calPortPos()
         for port in self.mNode.getInputPort():
             portName = port.getPortNamePrune() if port.getPortNamePrune() is not None else port.getPortName()
-            p.drawText(port.getPortPos(), portName)
+            p.drawText(port.getPortPos() - QPoint(17, 0), portName + "_" + port.getPortId())
 
         for port in self.mNode.getOutputPort():
             portName = port.getPortNamePrune() if port.getPortNamePrune() is not None else port.getPortName()
-            p.drawText(port.getPortPos(), portName)
+            p.drawText(port.getPortPos() - QPoint(17, 0), portName + "_" + port.getPortId())
         # if self.shape == "Line":
         #     p.drawLine(rect.topLeft(), rect.bottomRight())
         # elif self.shape == "Rectangle":
