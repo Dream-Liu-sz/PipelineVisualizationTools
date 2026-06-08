@@ -92,21 +92,28 @@ class MainWindow(QMainWindow):
         openImageFolderAct = QAction("open", self)
         openImageFolderAct.setStatusTip("Select Xml file")
         openImageFolderAct.setShortcut("Ctrl+O")
+        openImageFolderAct.triggered.connect(self.triggerOpenFile)
 
         menubar = self.menuBar()
         fileMenu = menubar.addMenu('File')
         fileMenu.addAction(openImageFolderAct)
-        fileMenu.triggered[QAction].connect(self.processtrigger)
 
         aboutAct = QAction("about", self)
         aboutAct.setStatusTip("about")
+        aboutAct.triggered.connect(self.processHelp)
+
+        tipsAct = QAction("tips", self)
+        tipsAct.setStatusTip("tips")
+        tipsAct.triggered.connect(self.showTips)
+
         helpMenu = menubar.addMenu('Help')
         helpMenu.addAction(aboutAct)
-        helpMenu.triggered[QAction].connect(self.processHelp)
+
+        helpMenu.addAction(tipsAct)
 
         Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
 
-    def processtrigger(self,q):
+    def triggerOpenFile(self, q):
         # directory1 = QFileDialog.getExistingDirectory(self,
         #                                               "选取文件夹",
         #                                               "./")  # 起始路径
@@ -131,14 +138,18 @@ class MainWindow(QMainWindow):
             self.initUseCase()
 
     def processHelp(self):
-        version = "V1.3"
-        update = "2021.12.22"
+        version = "V1.4"
+        update = "2022.6.24"
         aboutInfo = '                                                       \n'\
                     '    版本信息：%s                \n'\
                     '    版权所有@Jianlin           \n'\
                     '    问题反馈：a185531353@qq.com \n'\
                     '    最后更新时间：%s \n' % (version, update)
         QMessageBox.about(self, 'About', aboutInfo)
+
+    def showTips(self):
+        QMessageBox.about(self, 'Tips', "如果遇到导入文件后没有反映\n"
+                                        "需要导入编译生成xml(如：g_xxx_usecase.xml)")
 
     def initUseCase(self):
         Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))

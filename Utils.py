@@ -2,7 +2,7 @@
 from enum import Enum
 import inspect
 
-gLogLevel = 0
+gLogLevel = 1
 
 class Utils(object):
     mLogLevel = 3
