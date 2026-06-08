@@ -110,11 +110,11 @@ Complete project documentation is available in the [docs/](docs/) directory:
 
 | Field | Value |
 |-------|-------|
-| Version | V2.0 |
-| Last Updated | 2024-03-28 |
+| Version | V3.0 |
+| Last Updated | 2026-05-20 |
 | Author | Jianlin |
 | Contact | a185531353@qq.com |
 
 ## License
 
-Proprietary - Qualcomm internal tool.
+Proprietary - internal tool.
