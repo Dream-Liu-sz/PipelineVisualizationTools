@@ -189,10 +189,11 @@ class MainWindow(QMainWindow):
         self.mCanvasViewport.setMouseTracking(True)
         self.mCanvasViewport.setAttribute(Qt.WidgetAttribute.WA_Hover)
         self.mCanvasViewport.installEventFilter(self)
+        self.mInspectorDefaultWidth = 204
         self.initInspectorDrawer()
         self.mContentSplitter.addWidget(self.mCanvasViewport)
         self.mContentSplitter.addWidget(self.mInspector)
-        self.mContentSplitter.setSizes([900, 340])
+        self.mContentSplitter.setSizes([900, self.mInspectorDefaultWidth])
         self.mInspector.hide()
         self.mRightLayout.addWidget(self.mContentSplitter, 1)
 
@@ -200,7 +201,7 @@ class MainWindow(QMainWindow):
         self.mSplitter.addWidget(self.mRightPanel)
         self.mSplitter.setCollapsible(0, True)
         self.mSplitter.setCollapsible(1, False)
-        self.mSplitter.setSizes([self.mImageBrowserWidth, 1060])
+        self.mSplitter.setSizes([self.mLeftPanel.minimumWidth(), 1060])
         self.mSplitter.splitterMoved.connect(self.onSplitterMoved)
 
         self.mStatusText = QLabel("Drag canvas to pan | Right-click background: pipeline info | Wheel: vertical | Shift+Wheel: horizontal | Ctrl+Wheel: zoom")
@@ -209,8 +210,8 @@ class MainWindow(QMainWindow):
     def initInspectorDrawer(self):
         self.mInspector = QFrame(self.mContentSplitter)
         self.mInspector.setObjectName("inspectorDrawer")
-        self.mInspector.setMinimumWidth(260)
-        self.mInspector.resize(340, max(240, self.mCanvasViewport.height()))
+        self.mInspector.setMinimumWidth(200)
+        self.mInspector.resize(self.mInspectorDefaultWidth, max(240, self.mCanvasViewport.height()))
         self.mInspectorLayout = QVBoxLayout(self.mInspector)
         self.mInspectorLayout.setContentsMargins(14, 14, 14, 14)
         self.mInspectorLayout.setSpacing(8)
@@ -930,7 +931,8 @@ class MainWindow(QMainWindow):
     def ensureInspectorVisible(self):
         if not self.mInspector.isVisible():
             self.mInspector.show()
-            self.mContentSplitter.setSizes([max(520, self.mContentSplitter.width() - 340), 340])
+            self.mContentSplitter.setSizes([max(520, self.mContentSplitter.width() - self.mInspectorDefaultWidth),
+                                            self.mInspectorDefaultWidth])
         self.mInspector.raise_()
 
     def hideInspector(self):
