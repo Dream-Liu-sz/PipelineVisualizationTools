@@ -89,7 +89,7 @@ class NodePainter(QFrame):
         self.mNode.calPortPos()
         for port in self.mNode.getInputPort():
             portName = port.getPortNamePrune() if port.getPortNamePrune() is not None else port.getPortName()
-            p.drawText(port.getPortPos() - QPoint(17, 0), portName + "_" + port.getPortId())
+            p.drawText(port.getPortPos(), portName + "_" + port.getPortId())
 
         for port in self.mNode.getOutputPort():
             portName = port.getPortNamePrune() if port.getPortNamePrune() is not None else port.getPortName()
