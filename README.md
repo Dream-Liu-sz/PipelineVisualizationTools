@@ -139,8 +139,7 @@ Complete project documentation is available in the [docs/](docs/) directory:
 |-------|-------|
 | Version | V3.1 |
 | Last Updated | 2026-06-02 |
-| Author | Jianlin(Jaylen) |
-| Contact | a185531353@qq.com |
+| Author | Dream-Liu-sz |
 
 ## License
 
