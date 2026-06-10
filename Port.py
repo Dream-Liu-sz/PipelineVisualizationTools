@@ -91,14 +91,3 @@ class PortDes(object):
         Utils.LogD("      ", ("%s_%s" %
                             (str(self.mPortName),
                              str(self.mPortId))))
-    # def getNodePropertyId(self):
-    #     return self.mNodePropertyId
-    #
-    # def getNodePropertyDataType(self):
-    #     return self.mNodePropertyDataType
-    #
-    # def getNodePropertyName(self):
-    #     return self.mNodePropertyName
-    #
-    # def getNodePropertyValue(self):
-    #     return self.mNodePropertyValue

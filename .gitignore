@@ -1,6 +1,24 @@
-*patch
-.trae
+# Python 缓存
 __pycache__/
+*.py[cod]
+*$py.class
+
+# 测试与覆盖率
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 虚拟环境
+venv/
+.venv/
+
+# IDE
 .idea/
-build/
-dist/
+.vscode/
+*.swp
+
+# 临时文件
+*.bak
+*.diff
+*.tmp
+.DS_Store

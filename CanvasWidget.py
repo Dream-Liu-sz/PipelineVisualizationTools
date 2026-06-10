@@ -39,8 +39,6 @@ class CanvasImage(QFrame):
         self.mSelectedLink = None
         self.mHoveredLink = None
         self.mPendingSourcePort = None
-        # self.setAttribute(Qt.WidgetAttribute.WA_Hover);
-        # self.installEventFilter(self)
 
     def setShape(self, s):
         self.shape = s
@@ -70,17 +68,11 @@ class CanvasImage(QFrame):
         nodeFront = QFont()
         nodeFront.setPixelSize(self.mFontSize)
         self.pen.setWidth(3)
-        # p.setBrush(self.brush)
         painter.setFont(nodeFront)
 
         i = 0
         for out in self.mPortLinkDes.keys():
             for input in self.mPortLinkDes.get(out):
-                # Utils.LogD(self.TAG, ("ready draw  %s --> %s" % (out.getPortName(), input.getPortName())))
-                # Utils.LogD(self.TAG, out.getPortPos())
-                # Utils.LogD(self.TAG, out.getParentNodePos())
-                # Utils.LogD(self.TAG, input.getPortPos())
-                # Utils.LogD(self.TAG, input.getParentNodePos())
                 link_selected = self.mSelectedLink is not None and self.mSelectedLink[0] is out and self.mSelectedLink[1] is input
                 link_hovered = self.mHoveredLink is not None and self.mHoveredLink[0] is out and self.mHoveredLink[1] is input
                 for node in self.mNodeList:
@@ -257,22 +249,11 @@ class CanvasImage(QFrame):
 
     def mouseMoveEvent(self, event):
         '''
-        :Func:为了让拖动node painter时能够及时的绘制link
+        :Func: To repaint the link in time while dragging a node painter
         '''
         if Qt.LeftButton:
             self.update()
             event.ignore()
 
-    # def mouseReleaseEvent(self, event):
-    #     if event.button() == Qt.LeftButton:
-    #         self.update()
-    #         event.ignore()
-    #         Utils.LogI(self.TAG, "mouseReleaseEvent")
-
-    # def keyPressEvent(self, keyEvent):
-    #     if keyEvent.key() == Qt.Key_Shift:
-    #         Utils.LogE(self.TAG, "keyevent")
-
     def show(self):
         super(CanvasImage, self).show()
-    # def calSize(self):

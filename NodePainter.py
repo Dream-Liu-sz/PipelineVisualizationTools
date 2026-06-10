@@ -40,7 +40,6 @@ class NodePainter(QFrame):
         self.setAutoFillBackground(False)
         self.setMouseTracking(True)
         self.installEventFilter(parent)
-        # Utils.LogD(self.TAG, ("__init__ - minW %d minH %d" % (self.mMinWidth, self.mMinHeight)))
         self.setStyleSheet("background: transparent;")
         self.setFrameShadow(QFrame.Plain)
         self.setFrameShape(QFrame.NoFrame)
@@ -53,12 +52,9 @@ class NodePainter(QFrame):
         self.mShowPortLabels = True
 
     def connectParentSlot(self, slot):
-        '''
-        @Func:MainWindow注冊進來的槽函數，用來通知mainWindow，nodePainter接收了鼠標press事件
-              目前的作用是在mainWindow中用来解决鼠标悬停显示prop与鼠标按压拖拽node功能的
-        '''
+        # Slot registered by MainWindow to notify it when nodePainter receives a mouse press event
+        # Currently used to resolve the conflict between hover-showing-prop and press-dragging-node
         self.signal.connect(slot)
-        # pass
 
     def receviceParentMsg(self, msg):
         msgType, msgValue = msg.getMsg()
@@ -137,33 +133,6 @@ class NodePainter(QFrame):
                     p.drawText(port.getPortPos() - QPoint(8, -4), label)
                 else:
                     p.drawText(port.getPortPos() - QPoint(18, -4), label)
-        # if self.shape == "Line":
-        #     p.drawLine(rect.topLeft(), rect.bottomRight())
-        # elif self.shape == "Rectangle":
-        #     p.drawRect(rect)
-        # elif self.shape == 'Rounded Rectangle':
-        #     p.drawRoundedRect(rect, 25, 25, Qt.RelativeSize)
-        # elif self.shape == "Ellipse":
-        #     p.drawEllipse(rect)
-        # elif self.shape == "Polygon":
-        #     p.drawPolygon(QPolygon(points), Qt.WindingFill)
-        # elif self.shape == "Polyline":
-        #     p.drawPolyline(QPolygon(points))
-        # elif self.shape == "Points":
-        #     p.drawPoints(QPolygon(points))
-        # elif self.shape == "Pie":
-        #     p.drawPie(rect, startAngle, spanAngle)
-        # elif self.shape == "Arc":
-        #     p.drawArc(rect, startAngle, spanAngle)
-        # elif self.shape == "Chord":
-        #     p.drawChord(rect, startAngle, spanAngle)
-        # elif self.shape == "Path":
-        #     # p.drawPath(path)
-        #     pass
-        # elif self.shape == "Text":
-        #     p.drawText(rect, Qt.AlignCenter, "Hello Qt!")
-        # elif self.shape == "Pixmap":
-        #     p.drawPixmap(150, 150, QPixmap("images/qt-logo.png"))
 
     def setNodeSize(self, size):
         self.mNode.setNodeSize(size)
@@ -222,37 +191,31 @@ class NodePainter(QFrame):
             self.move(nextPos)
             self.mNode.setNodePos(nextPos)
             self.mNode.calPortPos()
-            # self.mNode.calPortPos(self.mNodeFont)
             event.ignore()
 
     def wheelEvent(self, event):
         if self.mKeyCtrlStatus:
-            angle = event.angleDelta() / 8    # 返回QPoint对象，为滚轮转过的数值，单位为1/8度
-            angleX = angle.x()                # 水平滚过的距离(此处用不上)
-            angleY = angle.y()                # 竖直滚过的距离
+            angle = event.angleDelta() / 8
+            angleX = angle.x()
+            angleY = angle.y()
             if angleY > 0:
-                # self.mCanvasWidth = self.mCanvasWidth + 50
-                # self.mCanvasHeight = self.mCanvasHeight + 50
-                # self.mCanvas.resize(self.mCanvasWidth, self.mCanvasHeight)
                 increase = 0
                 size = self.geometry()
                 if size.height() > self.mMinHeight or size.width() > self.mMinWidth:
                     self.mEnlargeSum += 2
                     increase = int(self.mEnlargeSum / 10)
-                    # Utils.LogI(self.TAG, ("mEnlargeSum %d increase %d" % (self.mEnlargeSum, increase)))
                     if increase >= 1:
                         self.mEnlargeSum = 0
                 self.resize(size.width() + 2, size.height() + int(2 * self.mScale + 0.5))
                 self.mNode.setNodeSize(QSize(self.geometry().width(), self.geometry().height()))
                 self.setFontSize(self.getFontSize() + increase)
                 self.update()
-            else:   # 滚轮下滚
+            else:
                 dec = 0
                 size = self.geometry()
                 if size.height() > self.mMinHeight or size.width() > self.mMinWidth:
                     self.mEnlargeSum -= 2
                     dec = int(self.mEnlargeSum / 10)
-                    # Utils.LogI(self.TAG, ("mEnlargeSum %d dec %d" % (self.mEnlargeSum, dec)))
                     if dec <= -1:
                         self.mEnlargeSum = 0
                 self.resize(size.width() - 2, size.height() - int(2 * self.mScale + 0.5))
@@ -277,9 +240,6 @@ class NodePainter(QFrame):
         self.mHovered = False
         self.update()
         super(NodePainter, self).leaveEvent(event)
-
-    # def keyPressEvent(self, keyEvent):
-    #     pass
 
     def show(self):
         super(NodePainter, self).show()

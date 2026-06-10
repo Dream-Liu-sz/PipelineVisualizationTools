@@ -1,3 +1,7 @@
+# Utils: project-wide utilities and logging wrappers.
+# Logging convention: TAG must be the current class name constant; msg must be a str()-able object.
+# Call template: Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
+# Severity levels (high to low): LogE(0) / LogI(1) / LogD(2) / LogV(3); controlled by gLogLevel.
 
 from enum import Enum
 import inspect
@@ -10,10 +14,6 @@ class Utils(object):
 
     def __init__(self):
         pass
-    # def __new__(cls):
-    #     if Utils.__instance is None:
-    #         Utils.__instance=object.__new__(cls)
-    #     return Utils.__instance
 
     def LogE(TAG, msg):
         if gLogLevel >= 0:

@@ -1,4 +1,4 @@
-﻿from PyQt5.Qt import QPoint, QSize
+from PyQt5.Qt import QPoint, QSize
 from PyQt5.Qt import QMessageBox
 from PyQt5.Qt import QMainWindow
 from PyQt5.QtCore import Qt, QEvent, QRect, QSettings, QTimer, pyqtSignal
@@ -25,7 +25,6 @@ import os
 import json5
 
 import resource
-# import time
 
 class MainWindow(QMainWindow):
     TAG = "MainWindow"
@@ -48,8 +47,6 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__(parent)
         self.setWindowTitle("Pipeline Visualization tools")
         self.resize(1280, 720)
-        # self.setCentralWidget(self.mCanvas)
-        # self.func()
         self.mImageBrowserWidth = self.EXPLORER_MIN_WIDTH
         self.mVlayoutInstalMap = dict()
         self.mNodePainterList = []
@@ -65,8 +62,6 @@ class MainWindow(QMainWindow):
         self.setAutoFillBackground(True)
         self.setWindowIcon(QIcon(":res/logo.ico"))
         self.applyNativeDarkTitleBar()
-        # self.setWindowFlag(Qt.FramelessWindowHint)
-        # self.setAttribute(Qt.WA_TranslucentBackground)
         self.isTimeEnd = False
         self.mTimerStartFlag = False
         self.mLabelMovePos = None
@@ -279,7 +274,6 @@ class MainWindow(QMainWindow):
         label_font = font(10, mono=True)
         self.mLabelMetrics = QFontMetrics(label_font)
         self.mLabel.setFont(label_font)
-        # self.mLabel.setAttribute(Qt.WA_TranslucentBackground, False)
         self.mLabel.setStyleSheet(tooltip_stylesheet())
         self.mLabel.setWordWrap(True)
         self.mLabel.setPalette(palette)
@@ -578,49 +572,21 @@ class MainWindow(QMainWindow):
         return QIcon(pixmap)
 
     def triggerOpenFile(self, q):
-        # directory1 = QFileDialog.getExistingDirectory(self,
-        #                                               "閫夊彇鏂囦欢澶?,
-        #                                               "./")  # 璧峰璺緞
-        # rootdir = r"C:\Users\lx\Documents"
         rootdir = self.getLastOpenDir(self.DEFAULT_XML_DIR)
         fileName, self.mFiletype = QFileDialog.getOpenFileName(self,
                                                           "Open XML pipeline file",
                                                           rootdir,
                                                           "Xml Files (*.xml);;All Files (*)")
 
-        # files, ok1 = QFileDialog.getOpenFileNames(self,
-        #                                           "澶氭枃浠堕€夋嫨",
-        #                                           "./",
-        #                                           "All Files (*);;Text Files (*.txt)")
-        #
-        # fileName2, ok2 = QFileDialog.getSaveFileName(self,
-        #                                              "鏂囦欢淇濆瓨",
-        #                                              "./",
-        #                                              "All Files (*);;Text Files (*.txt)")
         self.loadPipelineFiles(fileName)
 
     def triggerOpenFiles(self, q):
-        # directory1 = QFileDialog.getExistingDirectory(self,
-        #                                               "閫夊彇鏂囦欢澶?,
-        #                                               "./")  # 璧峰璺緞
-        # rootdir = r"C:\Users\lx\Documents"
         rootdir = self.getLastOpenDir(self.DEFAULT_JSON_DIR)
-        # folder_path = QFileDialog.getExistingDirectory(self, "閫夋嫨鏂囦欢澶?, rootdir)
-
-        # self.mFileName, self.mFiletype = QFileDialog.getOpenFileName(self,
-        #                                                   "閫夊彇鏂囦欢",
-        #                                                   rootdir,
-        #                                                   "Xml Files (*.xml);;All Files (*)")
 
         fileNames, self.mFiletype = QFileDialog.getOpenFileNames(self,
                                                                       "Open JSON pipeline files",
                                                                       rootdir,
                                                                       "Json Files (*.json);;All Files (*)")
-        #
-        # fileName2, ok2 = QFileDialog.getSaveFileName(self,
-        #                                              "鏂囦欢淇濆瓨",
-        #                                              "./",
-        #                                              "All Files (*);;Text Files (*.txt)")
         self.loadPipelineFiles(fileNames)
 
     def getLastOpenDir(self, fallbackDir):
@@ -792,59 +758,37 @@ class MainWindow(QMainWindow):
     def initUseCase(self):
         Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
         Utils.LogI(self.TAG, ("Select file is " + self.mFileName))
-        # 鍒涘缓璺熻妭鐐?
+        # Create the root use case
         self.mUseCase = UseCaseDes(str(self.mFileName), "")
         self.mUseCase.useCaseTranslation()
         self.updateTreeWidget()
         self.updateCanvasContext()
-        # self.root1 = QTreeWidgetItem(self.imageBrowser)
-        # self.root1.setText(0, '2UseCase')
-        # 榛樿灞曞紑
-        # self.imageBrowser.expandAll()
         Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
 
     def initAllJsonPipeline(self):
         Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
 
-        # 鍒涘缓璺熻妭鐐?
+        # Create the root use case
         self.mUseCase = UseCaseDes(self.mFileName, "NCFJsonUses")
         self.mUseCase.useCaseTranslationJson()
         self.updateTreeWidget()
         self.updateCanvasContext()
-        # self.root1 = QTreeWidgetItem(self.imageBrowser)
-        # self.root1.setText(0, '2UseCase')
-        # 榛樿灞曞紑
-        # self.imageBrowser.expandAll()
         Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
 
     def initBrowser(self):
-        '''
-            @Func:宸︿晶鏍戝舰閫夋嫨鏍?
-        '''
         Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
-        # self.imageBrowser = QListWidget(self)
         self.mImageBrowserPos = QPoint(0, 26)
         self.imageBrowser = QTreeWidget(self.mLeftPanel)
-        # self.mImageBrowserWidth = 400
-        # tree.setFixedSize(self.width(), self.height())  # 璁剧疆鎺т欢灏哄
         self.imageBrowser.setColumnCount(1)
         self.imageBrowser.setHeaderLabels(['name'])
-        # self.imageBrowser.setColumnWidth(0, 120)
-        # self.imageBrowser.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         self.imageBrowser.setMinimumSize(0, 0)
-        # self.imageBrowser.resize(self.mImageBrowserWidth, 0)
         self.imageBrowser.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
 
         self.imageBrowser.header().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.imageBrowser.header().setStretchLastSection(False)
         self.imageBrowser.header().setSectionResizeMode(QHeaderView.Stretch)
         self.imageBrowser.setHeaderHidden(True)
-        # self.imageBrowser.setMouseTracking(True)
         self.imageBrowser.raise_()
-        # self.setCentralWidget(self.imageBrowser)
-        # self.centralWidget().setMouseTracking(True)
-        # root1.setIcon(0, QIcon('鏂囦欢澶?png'))
-        # self.child1.setIcon(0, QIcon('鏂囦欢.png'))
         self.imageBrowser.setFrameShape(QFrame.NoFrame)
         self.imageBrowser.setFrameShadow(QFrame.Plain)
         self.imageBrowser.doubleClicked.connect(self.onClicked)
@@ -1360,9 +1304,7 @@ class MainWindow(QMainWindow):
         self.deleteCurrentSelection()
 
     def updateTreeWidget(self):
-        '''
-            @Func:缁欏乏渚ф爲褰㈤€夋嫨鏍忔坊鍔爄tem
-        '''
+        # Add items to the left-hand tree selection panel
         print(self.mUseCase.getPipelineMap().keys())
         for useCase in self.mUseCase.getPipelineMap().keys():
             root = QTreeWidgetItem(self.imageBrowser)
@@ -1389,9 +1331,7 @@ class MainWindow(QMainWindow):
             self.imageBrowser.collapseAll()
 
     def initImageWindow(self):
-        '''
-            @Func:鍒濆鍖栨渶涓嬪眰Qwidget锛屼互鍙婃壙杞絅odePainter鐨凜anvas
-        '''
+        # Initialize the bottom-most QWidget and the Canvas that hosts the NodePainter
         Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
         self.imageWindow = QWidget(self.mCanvasViewport)
         self.mImageWindowWidth = max(4000, self.mCanvasViewport.width())
@@ -1422,36 +1362,9 @@ class MainWindow(QMainWindow):
         self.mCanvas.backgroundClicked.connect(self.showPipelineDetails)
         self.mCanvas.show()
         Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
-        # tempLayout = QHBoxLayout()
-        # tempLayout.addWidget(self.mCanvas)
-        # self.mBottomCanvas.setLayout(tempLayout)
-
-    # def initLayout(self):
-    #     layoutH = QHBoxLayout()
-    #     layoutH.addWidget(self.imageBrowser, 1)
-    #     layoutH.addWidget(self.imageWindow, 9)
-    #     # layoutV = QVBoxLayout()
-    #     # layoutV.addWidget(self.)
-    #     # layoutH.setSize
-    #     self.setLayout(layoutH)
-
-    # def getVLayoutInstance(self, level):
-    #     Utils.LogD(self.TAG, ("%s:+ " % (sys._getframe().f_code.co_name)))
-    #     if self.mVlayoutInstalMap.get(level) == None:
-    #         layout = QVBoxLayout()
-    #         # layout.addStretch(50)
-    #         # layout.setContentsMargins(20,20,20,20)
-    #         temp = {level: layout}
-    #         Utils.LogD(self.TAG, ("level is %s, id %d" % (level, id(layout))))
-    #         self.mVlayoutInstalMap.update(temp)
-    #         Utils.LogD(self.TAG, ("layout ", self.mVlayoutInstalMap.get(level)))
-    #     Utils.LogD(self.TAG, ("%s:-" % (sys._getframe().f_code.co_name)))
-    #     return self.mVlayoutInstalMap.get(level)
 
     def initCanvas(self):
-        '''
-            @Func:鍦–anvas涓婄粯鍒禢odePainter
-        '''
+        # Draw the NodePainter on the Canvas
         Utils.LogD(self.TAG, ("%s: +" % (sys._getframe().f_code.co_name)))
         i = 0
         self.mZoomScale = self.DEFAULT_PIPELINE_ZOOM
@@ -2219,13 +2132,11 @@ class MainWindow(QMainWindow):
         return False
 
     def recieveMsg(self, item):
-        QMessageBox.information(self, 'QListView', '浣犻€夋嫨浜嗭細' + self.list[item.row()])
+        QMessageBox.information(self, 'QListView', 'You selected: ' + self.list[item.row()])
 
     def recieveChildMsgSlot(self, msg):
-        '''
-        @Func:娉ㄥ唽鍒皀odePainter涓殑棰濇Ы鍑芥暟锛屾帴鏀秐odePainter榧犳press浜嬩欢
-              鐩墠鐨勪綔鐢ㄦ槸鍦╩ainWindow涓敤鏉ヨВ鍐抽紶鏍囨偓鍋滄樉绀簆rop涓庨紶鏍囨寜鍘嬫嫋鎷絥ode鍔熻兘鐨?
-        '''
+        # Callback registered into nodePainter to receive its mouse-press events
+        # Currently used in mainWindow to resolve the conflict between hover-showing-prop and press-dragging-node
         msgType, msgValue = msg.getMsg()
         if msgType == MsgType.LeftButton:
             self.leftPress = msgValue
@@ -2236,9 +2147,7 @@ class MainWindow(QMainWindow):
             self.mCanvas.update()
 
     def mousePressEvent(self, event):
-        '''
-            @Func:閲嶈浇涓€涓嬮紶鏍囨寜涓嬩簨浠?鍗曞嚮)
-        '''
+        # Override the mouse press event (single click)
         if event.button() == Qt.LeftButton:
             if self.mImageBrowserChange == False:
                 Utils.LogI(self.TAG, ("mousePressEvent...", self.m_drag))
@@ -2246,16 +2155,13 @@ class MainWindow(QMainWindow):
                 self.m_DragPosition = event.globalPos() - self.mCanvas.pos()
                 self.setCursor(QCursor(Qt.OpenHandCursor))
                 event.accept()
-                # Utils.LogI(self.TAG, ("recieve mousePressEvent", "event:", event.globalPos(), "canvas:", self.mCanvas.pos()))
             else:
                 self.mImageBrowserStart = event.pos()
-                # Utils.LogI(self.TAG,
-                #            ("recieve mousePressEvent", "self.mImageBrowserStart:", self.mImageBrowserStart))
 
     def wheelEvent(self, event):
-        angle = event.angleDelta() / 8    # 杩斿洖QPoint瀵硅薄锛屼负婊氳疆杞繃鐨勬暟鍊硷紝鍗曚綅涓?/8搴?
-        angleX = angle.x()                # 姘村钩婊氳繃鐨勮窛绂?姝ゅ鐢ㄤ笉涓?
-        angleY = angle.y()                # 绔栫洿婊氳繃鐨勮窛绂?
+        angle = event.angleDelta() / 8    # Returns a QPoint with the wheel scroll amount; unit is 1/8 degree
+        angleX = angle.x()                # Horizontal scroll distance (not used here)
+        angleY = angle.y()                # Vertical scroll distance
         step = int(angleY * 2.5)
         if self.mMouseInBrowser is False:
             if self.mKeyCtrlStatus:
@@ -2267,7 +2173,7 @@ class MainWindow(QMainWindow):
 
         if angleY > 0:
             pass
-        else:                                                                  # 婊氳疆涓嬫粴
+        else:                                                                  # Wheel scrolled down
             pass
 
     def updateBrowserSize(self):
@@ -2289,8 +2195,6 @@ class MainWindow(QMainWindow):
             self.m_drag = False
             self.mImageBrowserChange = False
             self.setCursor(QCursor(Qt.ArrowCursor))
-            # self.updateBrowserSize()
-            # Utils.LogD(self.TAG, "mouseReleaseEvent")
 
     def getmImageBrowserWidth(self):
         return self.mImageBrowserWidth
@@ -2302,9 +2206,6 @@ class MainWindow(QMainWindow):
         if self.mImageBrowserChange is False and self.mSelectPipeline is not None:
             canvasRelativePos = self.mCanvas.mapFrom(self, pos)
             for node in self.mSelectPipeline.getNodeList():
-                # Utils.LogI(self.TAG,
-                #            ("pos: ", pos, "canvasRelativePos:", canvasRelativePos, "NodeName:", node.getNodeName(),
-                #             "NodePos", node.getNodePos(), "move:", node.getNodePos() + self.mCanvas.pos()))
                 if self.isSelectNode(node, canvasRelativePos):
                     nodePropList = node.getNodeProp()
                     propMsg += "Node: %s_%s\n" % (node.getNodeName(), str(node.getNodeInstanceId()))
@@ -2325,9 +2226,7 @@ class MainWindow(QMainWindow):
                         self.mLabelMovePos = QPoint(label_x, label_y)
                         enable = True
                         if self.mTimerStartFlag is False:
-                            # Utils.LogI(self.TAG, ("start time...", time.time()))
                             self.timer.start(800)
-                            # self.timer.singleShot(1200, self.timeSlot)
                             self.mTimerStartFlag = True
 
             if enable is True and self.mLabelStatus is False:
@@ -2348,7 +2247,6 @@ class MainWindow(QMainWindow):
                 self.mLabel.setVisible(False)
 
     def timeSlot(self):
-        # self.isTimeEnd = True
         self.mTimerStartFlag = False
 
         if self.mlabelStatusChanged:
@@ -2366,7 +2264,6 @@ class MainWindow(QMainWindow):
         self.mLabelPropMsg = ""
         self.mLabelMovePos = None
         self.mlabelStatusChanged = False
-        # Utils.LogI(self.TAG, ("run time...", time.time()))
 
     def eventFilter(self, object, event):
         if event.type() in (QEvent.DragEnter, QEvent.DragMove):
@@ -2381,9 +2278,7 @@ class MainWindow(QMainWindow):
                 event.acceptProposedAction()
                 return True
 
-        '''
-            @Func:澶勭悊QEvent.HoverMove浜嬩欢锛岄紶鏍囨寚閽堝浜庢爲褰㈢粨鏋勭殑閫夋嫨妗嗛檮浠舵椂锛屽彉涓哄乏鍙崇澶?
-        '''
+        # Handle QEvent.HoverMove: when the cursor is near the tree selection panel, change to a left-right resize cursor
         menubar = getattr(self, "mMenuBar", None)
         if object is menubar and event.type() in (QEvent.MouseMove, QEvent.HoverMove) and self.isMenuPopupOpen():
             return True
@@ -2515,7 +2410,6 @@ class MainWindow(QMainWindow):
     def keyReleaseEvent(self, keyEvent):
         if keyEvent.key() == Qt.Key_Shift:
             self.mKeyShiftStatus = False
-            # keyEvent.accept()
         elif keyEvent.key() == Qt.Key_Control:
             self.mKeyCtrlStatus = False
             msg = ComMsg(MsgType.KeyCtrl, False)
@@ -2525,5 +2419,3 @@ class MainWindow(QMainWindow):
         self.updateBrowserSize()
         self.updateCanvasContext()
         self.positionSnapshotButton()
-        # Utils.LogD(self.TAG,
-        #            ("%s: - self.mImageBrowserWidth %d" % (sys._getframe().f_code.co_name, self.mImageBrowserWidth)))

@@ -37,10 +37,10 @@ class NodeDes(object):
         self.mNodeNameTextHeight = 0
         # thisNode's output Port --> childNode's input Port
         self.mLinkDes = dict()
-        # 存放此node需要输出的那些child node，以及是此node的哪些output port 输出到 这些child node
-        # 即childNode <---> thisNode's outPutPort的map
+        # Stores child nodes that this node needs to output to, and which output ports lead to them
+        # i.e., child node <---> this node's output port mapping
         self.mChildNodeToOutputPortMap = dict()
-        # 即ParentNode <---> thisNode's inputPort的map
+        # i.e., parent node <---> this node's input port mapping
         self.mParentNodeToInputPortMap = dict()
         self.mChildNodeSortList = []
         self.mParentNodeList = []
@@ -49,7 +49,7 @@ class NodeDes(object):
         self.mFontSize = 24
         self.mTargetNode = False
 
-    def setNodePorp(self, propName=None, propId=None, propDataType=None, propValue=None):
+    def setNodeProp(self, propName=None, propId=None, propDataType=None, propValue=None):
         prop = (propName, propId, propDataType, propValue)
         self.mNodePropertyList.append(prop)
 
@@ -126,12 +126,6 @@ class NodeDes(object):
             if result and (self.mTargetNode or node.isTargetNode()):
                 if self.mTargetName.find(node.getTargetName()) < 0 and node.getTargetName().find(self.mTargetName) < 0:
                     result = self.mNodeName == node.getNodeName()
-                # Utils.LogI("    ", ("this %s_%s_%s_%s --> input %s_%s_%s" %
-                #                     (str(self.mNodeName),
-                #                      str(self.mNodeId),
-                #                      str(self.mNodeInstance),
-                #                      str(self.mNodeInstanceId),
-                #                      node.getNodeName(), node.getNodeId(), node.getNodeInstanceId())))
         return result
 
     def updateLink(self, link):
@@ -141,10 +135,8 @@ class NodeDes(object):
         return self.mLinkDes
 
     def updateChildNodePortMap(self, node, port):
-        '''
-        @Func:create此node的Output Port对应输出的node的map
-            即 childNode <---> thisNode's outPutPort 的 map
-        '''
+        # Build the map from this node's output Port to the child node it feeds
+        # i.e., childNode <---> thisNode's outPutPort map
         if self.mChildNodeToOutputPortMap.get(node) == None:
             portList = [port]
             temp = {node: portList}
@@ -156,10 +148,8 @@ class NodeDes(object):
             self.mChildNodeToOutputPortMap.update(temp)
 
     def updateParentNodePortMap(self, node, port):
-        '''
-        @Func:create此node的Input Port对应输入的node的map
-            即 ParentNode <---> thisNode's inputPort 的 map
-        '''
+        # Build the map from this node's input Port to the parent node that feeds it
+        # i.e., parentNode <---> thisNode's inputPort map
         if self.mParentNodeToInputPortMap.get(node) == None:
             list = [port]
             temp = {node: list}
@@ -198,10 +188,7 @@ class NodeDes(object):
         return False
 
     def calNodeNameArea(self):
-        '''
-        @Func:计算 node name 的 ared，后面会用来计算port name 和 node Name是否有重合
-        '''
-        # Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
+        # Calculate the area of the node name; later used to detect overlap with port name and node name
         self.mFont.setPixelSize(self.mFontSize)
         metrics = QFontMetrics(self.mFont)
         self.mNodeNameTextWidth = metrics.width(self.mNodeName)
@@ -210,7 +197,6 @@ class NodeDes(object):
         y = self.mNodeSize.height() / 2 + self.mNodeNameTextHeight / 2
 
         self.mNodeNameArea = QRect(x, y, self.mNodeNameTextWidth, self.mNodeNameTextHeight)
-        # Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
 
     def calOverlap(self, port, direction):
         Utils.LogV(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
@@ -223,9 +209,9 @@ class NodeDes(object):
         xOffset = 0
         yOffset = 0
         '''
-            1. xoffset如果小于0，则为inputPort x方向有重叠
-            2. xoffset如果大于0，则为outputPort x方向有重叠
-            3. output 全覆盖时
+            1. If xOffset is negative, the input port overlaps the node name on the x axis.
+            2. If xOffset is positive, the output port overlaps the node name on the x axis.
+            3. When the output fully overlaps the node name.
         '''
         if direction:
             temp = self.mNodeNameArea.x() - (portPos.x() + portWidth)
@@ -236,31 +222,24 @@ class NodeDes(object):
             if temp > 0:
                 xOffset = temp
         '''
-            1. port 在上方与node name有覆盖，上移yOffset 
-            2. port 在下方与node name有覆盖，下移yOffset
+            1. Port overlaps the node name above: shift yOffset upward.
+            2. Port overlaps the node name below: shift yOffset downward.
         '''
         if portPos.y() < self.mNodeNameArea.y():
-            # temp = self.mNodeNameArea.y() - (portPos.y() + portHeight)
             temp = (self.mNodeNameArea.y() - self.mNodeNameArea.height()) - portPos.y()
             if temp < 0:
-                # yOffset = self.mNodeNameArea.height() + self.mNodeNameArea.y() - portPos.y()
                 yOffset = temp
         else:
             temp = self.mNodeNameArea.y() - (portPos.y() - portHeight)
             if temp > 0:
                 yOffset = temp
 
-        # Utils.LogD(self.TAG, ("%s: - %s offset x %d y %d, portXY %d %d, width %d height %d, selfArea.XY %d %d, width %d height %d" % (
-        #     sys._getframe().f_code.co_name, port.getPortName(), xOffset, yOffset, portPos.x(), portPos.y(), portWidth, portHeight,
-        #     self.mNodeNameArea.x(), self.mNodeNameArea.y(), self.mNodeNameArea.width(), self.mNodeNameArea.height())))
         Utils.LogV(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
         return xOffset, yOffset
 
     def isNeedPurne(self, portList, direction):
-        '''
-            @Func:计算是否需要 Purne
-            @direction: True 为input，False 为Output
-        '''
+        # Determine whether pruning is needed.
+        # direction: True for input ports, False for output ports
         Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
         for port in portList:
             xOffset, yOffset = self.calOverlap(port, direction)
@@ -269,15 +248,12 @@ class NodeDes(object):
                     return True
             else:
                 if xOffset > 0:
-                    # Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
                     return True
         Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
         return False
 
     def pruneInputPortName(self):
-        '''
-        @Func:prune port Name
-        '''
+        # Prune port Name
         Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
         mInputPortNeedPrune = self.isNeedPurne(self.mInputPortList, True)
         if mInputPortNeedPrune:
@@ -295,9 +271,7 @@ class NodeDes(object):
         Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
 
     def pruneOutputPortName(self):
-        '''
-        @Func:prune port Name
-        '''
+        # prune port Name
         Utils.LogD(self.TAG, ("%s: + " % (sys._getframe().f_code.co_name)))
         mOutputPortNeedPrune = self.isNeedPurne(self.mOutputPortList, False)
         if mOutputPortNeedPrune:
@@ -316,11 +290,9 @@ class NodeDes(object):
         Utils.LogD(self.TAG, ("%s: - " % (sys._getframe().f_code.co_name)))
 
     def calNodeSize(self):
-        '''
-        @Func:计算node的Size
-            width 根据 SpecialNodeWidthMap 中的来计算
-            height 的 step也需要从NodeAdditionalLengthMap查找
-        '''
+        # Calculate node Size
+        # width is calculated using SpecialNodeWidthMap
+        # height step is also looked up in NodeAdditionalLengthMap
         length = 20
         for key in self.NodeAdditionalLengthMap.keys():
             if self.mNodeName.find(key) >= 0:
@@ -387,7 +359,7 @@ class NodeDes(object):
 
     def calOutputPortPosNew(self, font):
         '''
-        # 计算outputPort的pos，以及portName的width height
+        # Calculate the outputPort position and the width/height of the portName
         '''
         metrics = QFontMetrics(font)
         outputPortLength = len(self.mOutputPortList)
@@ -431,11 +403,9 @@ class NodeDes(object):
         self.mNodeLevelSet.add(level)
         for level in self.mNodeLevelSet:
             self.mNodeLevelList.append(level)
-        '''
-            pipeline@2:
-            D : PipelineDes : calChildNodePosNew:currentLevelKey 9 parent FDManager0 level 9, child SinkNoBuffer4 level 9, getNext 16
-            setNodeLevel时从大到小排序，不然会导致 parentNode 与 child 同级
-        '''
+        # pipeline@2:
+        # D : PipelineDes : calChildNodePosNew:currentLevelKey 9 parent FDManager0 level 9, child SinkNoBuffer4 level 9, getNext 16
+        # Sort setNodeLevel from largest to smallest; otherwise parentNode and child would end up on the same level
         self.mNodeLevelList.sort(reverse=True)
 
     def sortLevelList(self):

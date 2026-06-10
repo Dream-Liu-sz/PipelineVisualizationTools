@@ -196,7 +196,7 @@ class PipelineEditController(object):
             node.setSourceNodeFlag(node_state.get("source_node", False))
             for prop in node_state.get("props", []):
                 values = list(prop) + [None, None, None, None]
-                node.setNodePorp(values[0], values[1], values[2], values[3])
+                node.setNodeProp(values[0], values[1], values[2], values[3])
             for port_state in node_state.get("inputs", []):
                 node.addInputPort(self._port_from_state(port_state))
             for port_state in node_state.get("outputs", []):
@@ -296,7 +296,7 @@ class PipelineEditController(object):
         node.setTargetNode(template_node.isTargetNode())
         for prop in template_node.getNodeProp():
             values = list(prop) + [None, None, None, None]
-            node.setNodePorp(values[0], values[1], values[2], values[3])
+            node.setNodeProp(values[0], values[1], values[2], values[3])
         for name, port_id in fields.get("InputPorts", []):
             node.addInputPort(PortDes(name, port_id, fields["NodeName"], fields["NodeId"],
                                       fields["NodeInstance"], fields["NodeInstanceId"]))
